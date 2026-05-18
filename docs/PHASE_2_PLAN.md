@@ -214,14 +214,16 @@ RATE_LIMITED, UNAUTHORIZED, FORBIDDEN, INTERNAL_ERROR
 
 #### Store records
 
+> **As-built delta (Phase 2)**: All timestamp fields on store records are `string` (ISO 8601 UTC), not `DateTimeOffset`. See DECISIONS.md §Timestamps on Redis store records.
+
 | Type | Fields | Maps to |
 |---|---|---|
-| `OwnerStoreRecord` | `RequestId`, `ConnectionId: string?`, `UserId`, `TenantId`, `SubmittedAt: DateTimeOffset` | Redis owner-store; enables SignalR routing at dispatch time. TTL=10min enforced by `IOwnerStore.SaveAsync`, not in the record itself. |
-| `ResultStoreRecord` | `RequestId`, `Status: ResponseStatus`, `PayloadJson: string?`, `Error: ErrorDetail?`, `ElapsedMs: long`, `TenantId`, `StoredAt: DateTimeOffset` | Redis result-store; powers `GET /result` reconnection fallback |
-| `IdempotencyRecord` | `RequestId`, `Status: IdempotencyStatus`, `SubmittedAt: DateTimeOffset` | Redis idempotency check; prevents double-processing |
-| `ProgressEvent` | `RequestId`, `Percent: int`, `Message: string`, `TsUnixMs: long` | Redis Stream ring buffer (DECISIONS.md Phase 2 item); fed by `Progress.Dispatcher.Worker` |
+| `OwnerStoreRecord` | `RequestId`, `ConnectionId: string?`, `UserId`, `TenantId`, `SubmittedAt: string` (ISO 8601 UTC) | Redis owner-store; enables SignalR routing at dispatch time. TTL=10min enforced by `OwnerStore.SetAsync`. |
+| `ResultStoreRecord` | `RequestId`, `Status: ResponseStatus`, `PayloadJson: string?`, `Error: ErrorDetail?`, `ElapsedMs: long`, `TenantId`, `StoredAt: string` (ISO 8601 UTC) | Redis result-store; powers `GET /result` reconnection fallback |
+| `IdempotencyRecord` | `RequestId`, `OperationKey: string`, `Status: IdempotencyStatus`, `CreatedAt: string` (ISO 8601 UTC) | Redis idempotency check; prevents double-processing. `OperationKey` is SHA-256 of `operation + canonicalParams`. |
+| `ProgressEvent` | `RequestId`, `Percent: int`, `Message: string`, `Timestamp: string` (ISO 8601 UTC), `Step: string?`, `EventId: string?` | Redis Stream ring buffer (DECISIONS.md Phase 2 item); `EventId` is set on read-back from stream (XREAD entry ID), null on write. |
 
-`IdempotencyStatus` enum: `Accepted` (queued, terminal not yet known) | `Completed` (terminal stored in result-store)
+`IdempotencyStatus` enum: `Processing` (queued, terminal not yet known) | `Completed` (terminal stored in result-store)
 
 #### Validation
 
@@ -341,7 +343,9 @@ Three contexts, each covering a logical boundary:
 |---|---|---|
 | `ClientContractsJsonContext` | `RequestEnvelope`, `RequestOptions`, `SubmitAck`, `ResponseDispatchMessage`, `ResponseProgressMessage`, `ErrorDetail`, `WidgetStaleMessage`, `IngestEventEnvelope` | `Request.Api`, `Realtime.Hub`, SSE endpoint |
 | `RenderContractsJsonContext` | All 16 widget data classes, `WidgetEnvelope`, `WidgetMeta`, `DashboardRenderPayload`, `DashboardListPayload`, `DatasourceListPayload`, `DatasourcePreviewPayload`, `DrillContextResult`, `FilterOptionsResult`, `TableExportResult`, all `Shared/` sub-types | `Shared/Transformers`, `Shared/Operations` handlers |
-| `MessagingContractsJsonContext` | `OperationRequestMessage`, `OperationResponseMessage`, `OperationProgressMessage`, `CancelRequestMessage`, `OwnerStoreRecord`, `ResultStoreRecord`, `IdempotencyRecord`, `ProgressEvent` | `Shared/Messaging`, `Shared/Caching` |
+| `MessagingContractsJsonContext` | `OperationRequestMessage`, `OperationResponseMessage`, `OperationProgressMessage`, `CancelRequestMessage`, `OwnerStoreRecord`, `ResultStoreRecord`, `IdempotencyRecord`, `ProgressEvent`, enums `Priority`, `IdempotencyStatus` | `Shared/Messaging`, `Shared/Caching` |
+
+> **As-built delta (Phase 2)**: `ComputedTransform` is a `static class` of string constants (not an enum, not a record) and cannot be used as a type argument to `[JsonSerializable(typeof(...))]`. It is excluded from all STJ contexts. Callers reference its constants directly at compile time — no runtime serialization needed.
 
 Context declaration pattern:
 ```csharp

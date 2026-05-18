@@ -116,6 +116,13 @@ Locked at Phase 2 start. Apply to every project in the solution.
 - Add a comment only when the WHY is non-obvious: a hidden constraint, an invariant not visible from the type system, a workaround for a specific external behavior
 - Never comment WHAT the code does
 
+### CVE / vulnerability policy
+
+- NU1902 warnings (vulnerable packages) MUST be treated as build errors via `<TreatWarningsAsErrors>true</TreatWarningsAsErrors>` (already enforced)
+- Run `dotnet list package --vulnerable --include-transitive` at the start of each Phase
+- Bump immediately when patch versions are available — do not defer security patches across phase boundaries
+- Patches that bump major versions require a brief compatibility review note in the phase plan
+
 ---
 
 ## Phase 2 work items (surfaced during Phase 1.5 review)
