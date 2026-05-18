@@ -72,6 +72,52 @@ The `version` field on `DashboardRenderPayload` increments every time an admin s
 
 ---
 
+## Coding standards (locked for Phase 2 onward)
+
+Locked at Phase 2 start. Apply to every project in the solution.
+
+### Project-level settings (every `.csproj`)
+```xml
+<Nullable>enable</Nullable>
+<TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+```
+
+### Type shape
+- `record` for immutable DTOs (all Contracts types, queue messages, store records, response envelopes)
+- `class` for stateful types (validators, caches, services, MassTransit consumers)
+- `sealed` on all records and classes that are not designed for inheritance
+- Property init style for records (`public required string X { get; init; }`) — NOT primary constructor style. Reason: readable at scale, compatible with `required`, works cleanly with source-gen STJ.
+
+### Visibility
+- `public` for all types in `Shared/Contracts` (they are the integration surface)
+- `internal` for implementation helpers within any other Shared/* project
+- No `protected` on records; prefer composition over inheritance for DTOs
+
+### UUID generation
+- Use `Guid.CreateVersion7()` for all UUID v7 generation — never `Guid.NewGuid()`, never a custom implementation
+
+### JSON serialization
+- All JSON via source-generated `JsonSerializerContext` from day 1 — no `JsonSerializer.Serialize(obj)` with reflection-based options
+- Per-property `[JsonPropertyName]` ONLY when the C# identifier genuinely differs from the JSON wire name (e.g. an acronym or reserved keyword). Not for camelCase — that is handled globally by `PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase` in the context.
+- Enum serialization: source-gen context uses `UseStringEnumConverter = true` + `PropertyNamingPolicy = CamelCase`. No per-enum `[JsonConverter]` attributes.
+
+### MessagePack
+- `[MessagePackObject]` + `[Key("camelCaseName")]` string keys on types pushed server → client via SignalR
+- Types received client → server (Hub method args) do NOT need `[MessagePackObject]`; SignalR's resolver handles deserialization
+
+### Timestamps on Redis store records
+- Use ISO 8601 UTC string format (e.g. `"2026-05-18T10:00:00.000Z"`) — not `DateTimeOffset`, not `long` Unix ms
+- Conversion to/from `DateTimeOffset` happens at the boundary (store entry/exit), not in the record itself
+- **Rationale**: human-readable in `redis-cli`, language-agnostic for future polyglot tooling, consistent with wire contracts in PROTOCOL.md and with `QueuedAt: string` in `SubmitAck` (Option B)
+- Applied to: `OwnerStoreRecord.SubmittedAt`, `IdempotencyRecord.CreatedAt`, `ResultStoreRecord.*`, `ProgressEvent.Timestamp`
+
+### Comments
+- Default: no comments
+- Add a comment only when the WHY is non-obvious: a hidden constraint, an invariant not visible from the type system, a workaround for a specific external behavior
+- Never comment WHAT the code does
+
+---
+
 ## Phase 2 work items (surfaced during Phase 1.5 review)
 
 The following implementation requirements were clarified during the documentation review and must be tracked for the relevant phases:
