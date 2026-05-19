@@ -34,9 +34,19 @@ internal sealed class PostgresProviderRegistry : IProviderRegistry
         if (!snap.ByClientId.TryGetValue(clientId, out var reg))
             return Task.FromResult(false);
 
-        // BCrypt work factor 12; ~250ms verify cost is intentional.
-        var valid = BCrypt.Net.BCrypt.Verify(clientSecret, reg.ClientSecretHash);
-        return Task.FromResult(valid);
+        if (!string.Equals(reg.Status, "active", StringComparison.OrdinalIgnoreCase))
+            return Task.FromResult(false);
+
+        if (BCrypt.Net.BCrypt.Verify(clientSecret, reg.ClientSecretHash))
+            return Task.FromResult(true);
+
+        // Grace period: timestamp guard runs first to avoid unnecessary BCrypt cost.
+        if (reg.PendingClientSecretHash is not null
+            && reg.PendingSecretExpiresAt > DateTimeOffset.UtcNow
+            && BCrypt.Net.BCrypt.Verify(clientSecret, reg.PendingClientSecretHash))
+            return Task.FromResult(true);
+
+        return Task.FromResult(false);
     }
 
     public async Task ReloadAsync(CancellationToken ct = default)
@@ -64,7 +74,8 @@ internal sealed class PostgresProviderRegistry : IProviderRegistry
         cmd.CommandText = """
             SELECT provider_id, display_name, client_id, client_secret_hash,
                    operations, chart_types, transformers,
-                   timeout_ms, circuit_breaker, priority, status
+                   timeout_ms, circuit_breaker, priority, status,
+                   pending_client_secret_hash, pending_secret_expires_at, max_concurrent_requests
             FROM provider_registry
             ORDER BY provider_id
             """;
@@ -73,17 +84,20 @@ internal sealed class PostgresProviderRegistry : IProviderRegistry
         while (await reader.ReadAsync(ct))
         {
             rows.Add(new ProviderRow(
-                ProviderId:        reader.GetString(0),
-                DisplayName:       reader.GetString(1),
-                ClientId:          reader.GetString(2),
-                ClientSecretHash:  reader.GetString(3),
-                Operations:        reader.GetFieldValue<string[]>(4),
-                ChartTypes:        reader.GetFieldValue<string[]>(5),
-                Transformers:      reader.GetFieldValue<string[]>(6),
-                TimeoutMs:         reader.GetInt32(7),
-                CircuitBreakerJson:reader.GetString(8),
-                Priority:          reader.GetInt16(9),
-                Status:            reader.GetString(10)
+                ProviderId:               reader.GetString(0),
+                DisplayName:              reader.GetString(1),
+                ClientId:                 reader.GetString(2),
+                ClientSecretHash:         reader.GetString(3),
+                Operations:               reader.GetFieldValue<string[]>(4),
+                ChartTypes:               reader.GetFieldValue<string[]>(5),
+                Transformers:             reader.GetFieldValue<string[]>(6),
+                TimeoutMs:                reader.GetInt32(7),
+                CircuitBreakerJson:       reader.GetString(8),
+                Priority:                 reader.GetInt16(9),
+                Status:                   reader.GetString(10),
+                PendingClientSecretHash:  reader.IsDBNull(11) ? null : reader.GetString(11),
+                PendingSecretExpiresAt:   reader.IsDBNull(12) ? null : reader.GetFieldValue<DateTimeOffset>(12),
+                MaxConcurrentRequests:    reader.IsDBNull(13) ? 8 : reader.GetInt32(13)
             ));
         }
 
@@ -101,17 +115,20 @@ internal sealed class PostgresProviderRegistry : IProviderRegistry
 
             registrations.Add(new ProviderRegistration
             {
-                ProviderId       = row.ProviderId,
-                DisplayName      = row.DisplayName,
-                ClientId         = row.ClientId,
-                ClientSecretHash = row.ClientSecretHash,
-                Operations       = row.Operations,
-                ChartTypes       = row.ChartTypes,
-                Transformers     = row.Transformers,
-                TimeoutMs        = row.TimeoutMs,
-                CircuitBreaker   = cb,
-                Priority         = row.Priority,
-                Status           = row.Status,
+                ProviderId              = row.ProviderId,
+                DisplayName             = row.DisplayName,
+                ClientId                = row.ClientId,
+                ClientSecretHash        = row.ClientSecretHash,
+                PendingClientSecretHash = row.PendingClientSecretHash,
+                PendingSecretExpiresAt  = row.PendingSecretExpiresAt,
+                Operations              = row.Operations,
+                ChartTypes              = row.ChartTypes,
+                Transformers            = row.Transformers,
+                TimeoutMs               = row.TimeoutMs,
+                CircuitBreaker          = cb,
+                Priority                = row.Priority,
+                Status                  = row.Status,
+                MaxConcurrentRequests   = row.MaxConcurrentRequests,
             });
         }
 
@@ -125,17 +142,20 @@ internal sealed class PostgresProviderRegistry : IProviderRegistry
     }
 
     private sealed record ProviderRow(
-        string   ProviderId,
-        string   DisplayName,
-        string   ClientId,
-        string   ClientSecretHash,
-        string[] Operations,
-        string[] ChartTypes,
-        string[] Transformers,
-        int      TimeoutMs,
-        string   CircuitBreakerJson,
-        short    Priority,
-        string   Status);
+        string          ProviderId,
+        string          DisplayName,
+        string          ClientId,
+        string          ClientSecretHash,
+        string[]        Operations,
+        string[]        ChartTypes,
+        string[]        Transformers,
+        int             TimeoutMs,
+        string          CircuitBreakerJson,
+        short           Priority,
+        string          Status,
+        string?         PendingClientSecretHash,
+        DateTimeOffset? PendingSecretExpiresAt,
+        int             MaxConcurrentRequests);
 
     private sealed record ProviderSnapshot(
         IReadOnlyDictionary<string, ProviderRegistration> ById,

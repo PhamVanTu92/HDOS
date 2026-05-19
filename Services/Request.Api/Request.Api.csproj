@@ -12,6 +12,8 @@
     <ProjectReference Include="..\..\Shared\Operations\Operations.csproj" />
     <ProjectReference Include="..\..\Shared\Caching\Caching.csproj" />
     <ProjectReference Include="..\..\Shared\Telemetry\Telemetry.csproj" />
+    <ProjectReference Include="..\..\Shared\Providers\Providers.csproj" />
+    <ProjectReference Include="..\..\Shared\Auth\Auth.csproj" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="MassTransit.RabbitMQ" Version="8.2.5" />
@@ -20,5 +22,15 @@
     <PackageReference Include="AspNetCore.HealthChecks.Redis" Version="9.0.0" />
     <PackageReference Include="StackExchange.Redis" Version="2.7.33" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.4" />
+    <PackageReference Include="Npgsql" Version="9.0.3" />
+    <PackageReference Include="BCrypt.Net-Next" Version="4.0.3" />
+    <PackageReference Include="Microsoft.AspNetCore.DataProtection.StackExchangeRedis" Version="9.0.4" />
+    <PackageReference Include="Grpc.Net.Client" Version="2.65.0" />
+    <PackageReference Include="Google.Protobuf" Version="3.29.3" />
+    <PackageReference Include="Grpc.Tools" Version="2.65.0" PrivateAssets="All" />
+    <PackageReference Include="AspNetCore.HealthChecks.NpgSql" Version="9.0.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <Protobuf Include="..\..\proto\provider.proto" GrpcServices="Client" />
   </ItemGroup>
 </Project>

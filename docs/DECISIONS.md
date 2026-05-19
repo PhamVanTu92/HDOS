@@ -373,3 +373,48 @@ Server-side orphan detection (`GET /result` returning `{ "status": "orphaned" }`
 `POST /api/v1/admin/providers/{id}/probe` performs a synthetic Hello/Welcome handshake to verify provider connectivity without requiring the provider's JWT. Returns `{ tlsHandshake, jwtAccepted, welcomeReceived, latencyMs }`.
 
 Referenced in `docs/PROVIDER_ONBOARDING.md §5.2` (Option C) and `docs/PROTOCOL.md §8.7`. Must be implemented as part of the admin endpoint suite alongside Provider Bridge (Phase 8).
+
+---
+
+## Phase 8 — Provider Bridge design decisions
+
+### OQ-C: External operation routing — Option C approved
+
+**Finding**: `Operation.Router.Worker` (Phase 6) has NO routing to `q.provider.{providerId}` queues. Three priority queues (`op-request-high/normal/low`) receive all `OperationRequestMessage`s. `OperationDispatcher` resolves handlers from `OperationHandlerRegistry`, which contains only internal handlers. External operations (HandlerType=external) would return `HANDLER_NOT_FOUND`.
+
+**The data was already available**: `OperationRegistration` has `HandlerType` and `ProviderId` fields, both resolved at Step 1 of `RequestSubmissionService.SubmitAsync`. The routing key choice at Step 8 simply didn't use them.
+
+**Decision (Option C — pre-route at submission time)**:
+- `RequestSubmissionService.SubmitAsync` checks `registration.HandlerType` at Step 8
+- If `"external"` and `ProviderId` is non-null: routing key = `$"provider.{registration.ProviderId}"`
+- Otherwise: existing priority-based routing key (`operation.request.high/normal/low`)
+- Published to same `operation.request` exchange — no exchange topology change
+- `Provider.Bridge`'s `ProviderRequestConsumer` declares and binds `q.provider.{providerId}` to `operation.request` exchange with routing key `provider.{providerId}` on session start
+
+**Why not Option A/B** (modifying Operation.Router.Worker): Both add an extra message hop through the Router Worker — increased latency, changed Phase 6 service, forwarding consumer complexity. Option C is one conditional in `RequestSubmissionService` with routing data already present.
+
+**No changes to**: `Operation.Router.Worker`, `OperationDispatcher`, `OperationHandlerRegistry`, `IOperationBus`, `MassTransitOperationBus`.
+
+### Queue argument mismatch on re-declare
+
+`ProviderRequestConsumer` wraps `channel.QueueDeclare(...)` in `try/catch` for `OperationInterruptedException` (PRECONDITION_FAILED — 406). On catch: log warning and continue — the existing queue is used as-is. Manual queue delete or a runtime migration is required when TTL or DLX arguments change between deploys. This is intentional: silently failing to redeclare is safer than crashing the session on reconnect.
+
+### JWT probe differentiation
+
+Probe JWTs issued by `POST /api/v1/admin/providers/{id}/probe` carry an additional claim `purpose: "probe"` with `exp = iat + 60` (maximum 60-second TTL). `JwtValidationInterceptor` enforces:
+- `purpose == "probe"` AND `Hello.supportedOperations.Length > 0` → `INVALID_ARGUMENT` (probe cannot serve real operations)
+- `purpose` absent or `!= "probe"` AND `Hello.supportedOperations.Length == 0` → `INVALID_ARGUMENT` (real provider must declare at least one operation)
+- Probe JTI audit logged with `action = 'probe'` in `provider_credentials_audit`
+
+### Pending hash cleanup — defense-in-depth
+
+Short-circuit order in `ValidateCredentialsAsync` during rotation grace: `pending_secret_expires_at > UtcNow` is evaluated BEFORE calling `BCrypt.Verify` on the pending hash. If grace has expired, the second BCrypt call is skipped entirely (DoS mitigation — avoids 500ms cost from an unauthenticated caller who knows rotation is in progress).
+
+A background `PendingHashCleanupService` (`IHostedService`) runs every 5 minutes and clears stale pending hashes:
+```sql
+UPDATE provider_registry
+SET pending_client_secret_hash = NULL, pending_secret_expires_at = NULL
+WHERE pending_secret_expires_at IS NOT NULL
+  AND pending_secret_expires_at < NOW() - INTERVAL '5 minutes';
+```
+The extra 5-minute buffer beyond `pending_secret_expires_at` ensures no race with an active verification that loaded the row just before the scheduled update ran.

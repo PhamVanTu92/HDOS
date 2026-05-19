@@ -1,7 +1,12 @@
 using MassTransit;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.RateLimiting;
+using Npgsql;
+using ReportingPlatform.Auth;
 using ReportingPlatform.Caching;
 using ReportingPlatform.Operations.Extensions;
+using ReportingPlatform.Providers.Extensions;
 using ReportingPlatform.RequestApi.Controllers;
 using ReportingPlatform.RequestApi.Services;
 using ReportingPlatform.RequestApi.Sse;
@@ -14,14 +19,39 @@ var builder = WebApplication.CreateBuilder(args);
 var apiOpts   = builder.Configuration.GetSection(ReportingPlatform.RequestApi.Options.ApiOptions.Section)
                     .Get<ReportingPlatform.RequestApi.Options.ApiOptions>()
                     ?? new ReportingPlatform.RequestApi.Options.ApiOptions();
-var redisConn = builder.Configuration["Redis:ConnectionString"] ?? "localhost:6379";
-var rabbitUri = builder.Configuration["RabbitMQ:Uri"]           ?? "amqp://guest:guest@localhost/";
-var jwtAuth   = builder.Configuration["Auth:Authority"]          ?? string.Empty;
-var jwtAud    = builder.Configuration["Auth:Audience"]           ?? string.Empty;
+var redisConn = builder.Configuration["Redis:ConnectionString"]  ?? "localhost:6379";
+var rabbitUri = builder.Configuration["RabbitMQ:Uri"]            ?? "amqp://guest:guest@localhost/";
+var jwtAuth   = builder.Configuration["Auth:Authority"]           ?? string.Empty;
+var jwtAud    = builder.Configuration["Auth:Audience"]            ?? string.Empty;
+var pgConnStr = builder.Configuration.GetConnectionString("Postgres")
+                ?? "Host=localhost;Database=hdos;Username=hdos;Password=hdos";
 
 // ── Shared infrastructure ─────────────────────────────────────────────────
 builder.Services.AddPlatformCaching(builder.Configuration);
 builder.Services.AddPlatformTelemetry(builder.Configuration, "Request.Api");
+
+// ── Postgres ──────────────────────────────────────────────────────────────
+builder.Services.AddSingleton(_ => NpgsqlDataSource.Create(pgConnStr));
+
+// ── Data Protection — Redis key ring in production, local FS in dev ───────
+var dpBuilder = builder.Services.AddDataProtection()
+    .SetApplicationName("ReportingPlatform.RequestApi");
+if (builder.Environment.IsProduction())
+{
+    var redisForDp = ConnectionMultiplexer.Connect(redisConn);
+    dpBuilder.PersistKeysToStackExchangeRedis(redisForDp, "DataProtection-Keys");
+}
+
+// ── Provider registry (uses the NpgsqlDataSource already registered above) ─
+builder.Services.AddPlatformProvidersWithExistingDataSource();
+
+// ── Signing key service + JWT issuer ──────────────────────────────────────
+builder.Services.AddSigningKeyService();
+
+// ── Provider-specific services ────────────────────────────────────────────
+builder.Services.AddSingleton<ProviderLockoutService>(sp =>
+    new ProviderLockoutService(sp.GetRequiredService<IDatabase>()));
+builder.Services.AddHostedService<PendingHashCleanupService>();
 
 // ── MassTransit (publish only) ────────────────────────────────────────────
 builder.Services.AddMassTransit(x =>
@@ -37,7 +67,7 @@ builder.Services.AddSingleton<SseConnectionRegistry>();
 builder.Services.AddSingleton<OrphanDetector>();
 builder.Services.AddHostedService<ProgressPubSubSubscriber>();
 
-// ── JWT authentication ────────────────────────────────────────────────────
+// ── JWT authentication (user JWTs from external IdP) ─────────────────────
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(o =>
     {
@@ -47,7 +77,6 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         {
             OnMessageReceived = ctx =>
             {
-                // Browser EventSource cannot set headers — accept ?access_token= for SSE.
                 if (ctx.HttpContext.Request.Path.StartsWithSegments("/sse"))
                 {
                     var token = ctx.Request.Query["access_token"].ToString();
@@ -59,15 +88,18 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 builder.Services.AddAuthorization();
 
+// ── Response caching (for JWKS endpoint) ─────────────────────────────────
+builder.Services.AddResponseCaching();
+
 // ── Rate limiting (per-user + per-tenant sliding window) ──────────────────
 builder.Services.AddRateLimiter(o =>
 {
     o.AddSlidingWindowLimiter("per-user", opts =>
     {
-        opts.Window          = TimeSpan.FromMinutes(1);
-        opts.PermitLimit     = apiOpts.PerUserPerMinute;
+        opts.Window            = TimeSpan.FromMinutes(1);
+        opts.PermitLimit       = apiOpts.PerUserPerMinute;
         opts.SegmentsPerWindow = 4;
-        opts.QueueLimit      = 0;
+        opts.QueueLimit        = 0;
     });
     o.OnRejected = async (ctx, ct) =>
     {
@@ -86,19 +118,20 @@ builder.Services.AddProblemDetails();
 builder.Services.AddHealthChecks()
     .AddCheck("self", () => Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Healthy(),
         tags: ["live"])
-    .AddRedis(redisConn, name: "redis", tags: ["ready"]);
+    .AddRedis(redisConn, name: "redis", tags: ["ready"])
+    .AddNpgSql(pgConnStr, name: "postgres", tags: ["ready"]);
 
 var app = builder.Build();
 
 app.UseExceptionHandler();
 app.UseStatusCodePages();
+app.UseResponseCaching();
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseRateLimiter();
 
 app.MapControllers();
 
-// ── SSE endpoint (minimal API — controller doesn't fit the streaming response model) ──
 app.MapGet("/sse/requests/{requestId}/progress",
     [Authorize] async (
         string requestId,

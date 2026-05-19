@@ -153,13 +153,24 @@ public sealed class RequestSubmissionService
             ParentRequestId = null,
         };
 
-        // Step 8: Publish to priority queue
-        var routingKey = envelope.Options.Priority switch
+        // Step 8: Publish to priority queue (internal) or provider queue (external).
+        // External operations bypass the Router Worker entirely — routed directly to
+        // q.provider.{providerId} which Provider.Bridge declares + binds on session start.
+        string routingKey;
+        if (registration.HandlerType.Equals("external", StringComparison.OrdinalIgnoreCase)
+            && registration.ProviderId is not null)
         {
-            Priority.High => "operation.request.high",
-            Priority.Low  => "operation.request.low",
-            _             => "operation.request.normal",
-        };
+            routingKey = $"provider.{registration.ProviderId}";
+        }
+        else
+        {
+            routingKey = envelope.Options.Priority switch
+            {
+                Priority.High => "operation.request.high",
+                Priority.Low  => "operation.request.low",
+                _             => "operation.request.normal",
+            };
+        }
 
         await _bus.PublishAsync(message, routingKey, ct);
 
