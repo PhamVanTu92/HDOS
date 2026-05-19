@@ -1,0 +1,17 @@
+global using System.Diagnostics;
+global using System.Text.Json;
+global using System.Text.Json.Serialization;
+global using System.Threading.Channels;
+global using Microsoft.Extensions.Logging;
+global using Microsoft.Extensions.DependencyInjection;
+global using ReportingPlatform.Contracts.Definitions;
+global using ReportingPlatform.Contracts.Enums;
+global using ReportingPlatform.Contracts.Exceptions;
+global using ReportingPlatform.Contracts.Messaging;
+global using ReportingPlatform.Contracts.RenderPayloads;
+global using ReportingPlatform.Contracts.RenderPayloads.Operations;
+global using ReportingPlatform.Contracts.RenderPayloads.Shared;
+global using ReportingPlatform.Contracts.Validation;
+global using ReportingPlatform.Operations.Abstractions;
+global using ReportingPlatform.Operations.Context;
+global using ReportingPlatform.Telemetry;

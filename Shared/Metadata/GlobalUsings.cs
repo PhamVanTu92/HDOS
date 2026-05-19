@@ -1,0 +1,9 @@
+global using System.Text.Json;
+global using System.Text.Json.Serialization;
+global using Microsoft.Extensions.Logging;
+global using Microsoft.Extensions.DependencyInjection;
+global using StackExchange.Redis;
+global using ReportingPlatform.Contracts.Definitions;
+global using ReportingPlatform.Contracts.RenderPayloads;
+global using ReportingPlatform.Metadata.Abstractions;
+global using ReportingPlatform.Metadata.Results;

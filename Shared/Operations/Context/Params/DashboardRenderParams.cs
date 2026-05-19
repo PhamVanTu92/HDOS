@@ -1,0 +1,10 @@
+using ReportingPlatform.Contracts.TableParams;
+
+namespace ReportingPlatform.Operations.Context.Params;
+
+public sealed record DashboardRenderParams
+{
+    public required string DashboardCode { get; init; }
+    public IReadOnlyDictionary<string, JsonElement>? Filters     { get; init; }
+    public IReadOnlyDictionary<string, TablePaginationParams>? TableParams { get; init; }
+}

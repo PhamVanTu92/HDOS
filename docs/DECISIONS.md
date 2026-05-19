@@ -1,5 +1,5 @@
 # DECISIONS.md — Architecture & Design Decisions
-> Created: 2026-05-18 | Updated after Phase 1.5 review
+> Created: 2026-05-18 | Updated after Phase 5 (2026-05-19)
 
 This file records non-obvious decisions made during platform design. Each entry explains the chosen behaviour, why alternatives were rejected, and what it implies for implementation. Frontend and provider teams should read entries that affect their integration surface.
 
@@ -185,6 +185,68 @@ The following implementation requirements were clarified during the documentatio
 Fix 3 in the Phase 1.5 review established a **binding requirement**: the backend must buffer up to 100 progress events per `requestId` for up to 30 seconds before any SSE client connects. This covers the race window where a client opens SSE slightly after the first progress event was emitted.
 
 **Implementation**: when implementing `Progress.Dispatcher.Worker`, the Redis pub/sub channel `sse-progress:{requestId}` must maintain a small ring buffer. Recommended approach: Redis Stream (`XADD` with `MAXLEN ~ 100`) with a 30-second TTL on the stream key. SSE endpoint reads backlog on connect (`XRANGE`) then switches to live `XREAD`.
+
+---
+
+## Handler unit-test coverage policy (Phase 5)
+
+Of the 18 operation handlers shipped in Phase 5, 7 have dedicated per-handler unit-test suites covering their non-trivial paths:
+
+| Handler | Tests | Why tested |
+|---------|-------|------------|
+| `DashboardRenderHandler` | 2 | Progress reporting, mandatory-param guard |
+| `WidgetTableExportHandler` | 4 | CSV/XLSX bytes, row-limit enforcement, format guard |
+| `WidgetDrillContextHandler` | 8 | Token resolution grammar (3 scopes), mismatch, missing fields |
+| `WidgetFilterOptionsHandler` | 3 | Static vs adapter paths, search filter |
+| `MetadataDashboardUpsertHandler` | 4 | Version increment, cache invalidation, E2E L0 eviction |
+| `OperationDispatcher` | 7 | All failure modes + progress drain |
+| `RequestSubmissionService` | 5 | End-to-end submit + idempotency |
+
+The remaining 11 handlers (`DashboardListHandler`, `DashboardGetHandler`, all three Datasource handlers, `MetadataDashboardDeleteHandler`, `MetadataDatasourceUpsertHandler`, `MetadataDatasourceDeleteHandler`, `MetadataSchemaUpsertHandler`, `AdminProvidersReloadHandler`, `AdminCacheFlushHandler`) are simple delegators: resolve params, call one repository/registry method, `SerializeToElement`, return. They contain no branching logic beyond the `INVALID_PARAMS` guard in `AdminCacheFlushHandler`. Per-handler unit tests would be ~400 lines of identical fake-repository boilerplate with no meaningful invariant to assert.
+
+**Decision**: these 11 handlers are not tested at the unit level. Their correctness relies on:
+1. The `OperationDispatcher` integration tests (handler resolved + dispatched correctly)
+2. The `OperationsExtensions` DI registration (all 18 handlers registered)
+3. The Postgres repository implementations (covered by Phase 12 integration tests)
+
+If a handler gains branching logic in a future phase, per-handler tests must be added at that point.
+
+---
+
+## Object storage — deferred to Phase 11
+
+**Question (Q4):** Which object storage provider handles large exports (widget.tableExport > 5 000 rows), generated PDF reports, and any binary artefacts produced by handler pipelines?
+
+**Phase 5 decision**: Deferred. The `WidgetTableExportHandler` intentionally throws `LARGE_EXPORT_NOT_SUPPORTED` (code `LARGE_EXPORT_NOT_SUPPORTED`) for datasets > 5 000 rows. The 5 000-row inline limit is enforced today and ships in Phase 5.
+
+**Phase 11 target**: Define and implement `IObjectStorageClient` with two concrete adapters:
+- **Local / dev**: MinIO (S3-compatible, single Docker container) — zero AWS dependency, runnable offline.
+- **Production**: AWS S3 (primary) or Azure Blob Storage (alternate, switchable via config). Provider chosen at deploy time via `ObjectStorage:Provider = s3 | azureblob | minio`.
+
+**Interface contract (Phase 11 to define)**:
+```csharp
+public interface IObjectStorageClient
+{
+    Task<Uri>   UploadAsync(string key, Stream data, string contentType, CancellationToken ct = default);
+    Task<Stream> DownloadAsync(string key, CancellationToken ct = default);
+    Task        DeleteAsync(string key, CancellationToken ct = default);
+    Task<bool>  ExistsAsync(string key, CancellationToken ct = default);
+}
+```
+
+**Large-export flow (Phase 11)**:
+1. `WidgetTableExportHandler` streams rows to `IObjectStorageClient.UploadAsync` → receives a pre-signed URL (TTL = 1 hour).
+2. Returns `TableExportResult { ContentBase64 = null, DownloadUrl = "https://...", SizeBytes, Format }`.
+3. Frontend opens `DownloadUrl` directly — no backend proxy hop.
+
+**Security invariants**:
+- Pre-signed URLs must include a TTL; backend never generates permanent public URLs.
+- Keys are namespaced `exports/{tenantId}/{requestId}/{fileName}` to prevent cross-tenant access.
+- IAM policy for production S3 must grant `PutObject` + `GetObject` on the exports prefix only — no `DeleteObject` from the app role (lifecycle policy handles cleanup).
+
+**Why not Phase 5**: no CI/CD pipeline for MinIO Testcontainers yet; handler interface contract not finalised; Phase 11 is the designated integration & storage phase.
+
+---
 
 ### Admin probe endpoint (Phase 8 — Provider Bridge)
 
