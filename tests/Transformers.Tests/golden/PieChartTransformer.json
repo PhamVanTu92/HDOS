@@ -1,0 +1,17 @@
+{
+  "slices": [
+    {
+      "label": "APAC",
+      "value": 400
+    },
+    {
+      "label": "EMEA",
+      "value": 600
+    },
+    {
+      "label": "NA",
+      "value": 1000
+    }
+  ],
+  "total": 2000
+}

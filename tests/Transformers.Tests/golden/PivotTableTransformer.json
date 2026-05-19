@@ -1,0 +1,67 @@
+{
+  "rowDimensions": [
+    {
+      "key": "region",
+      "label": "Region"
+    }
+  ],
+  "columnDimensions": [
+    {
+      "key": "quarter",
+      "label": "Quarter"
+    }
+  ],
+  "measures": [
+    {
+      "key": "revenue",
+      "label": "Revenue",
+      "aggregate": "sum"
+    }
+  ],
+  "cells": [
+    {
+      "rowKey": [
+        "APAC"
+      ],
+      "columnKey": [
+        "Q1"
+      ],
+      "values": {
+        "revenue": 500
+      }
+    },
+    {
+      "rowKey": [
+        "APAC"
+      ],
+      "columnKey": [
+        "Q2"
+      ],
+      "values": {
+        "revenue": 620
+      }
+    },
+    {
+      "rowKey": [
+        "EMEA"
+      ],
+      "columnKey": [
+        "Q1"
+      ],
+      "values": {
+        "revenue": 800
+      }
+    },
+    {
+      "rowKey": [
+        "EMEA"
+      ],
+      "columnKey": [
+        "Q2"
+      ],
+      "values": {
+        "revenue": 910
+      }
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "filterKey": "status",
+  "label": "Status",
+  "options": [
+    {
+      "value": "active",
+      "label": "Active"
+    },
+    {
+      "value": "inactive",
+      "label": "Inactive"
+    }
+  ],
+  "multiSelect": false,
+  "searchable": false,
+  "clearable": true
+}

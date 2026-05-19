@@ -131,25 +131,44 @@ Locked at Phase 2 start. Apply to every project in the solution.
 
 ---
 
-## Phase 3 integration tests — deferred execution
+## Markdown rendering policy
+
+Applies to `TextWidgetTransformer` (Phase 4) and any future markdown rendering surface.
+
+- **Markdown library**: Markdig — pinned to an exact patch version (NOT a range like `0.40.x`). Current pin: `0.37.0`. Re-pin only when a patch release addresses a CVE or a required feature; record the change reason here.
+- **HTML sanitization**: HtmlSanitizer — pinned to an exact patch version. Run `dotnet list package --vulnerable` at each phase start to verify.
+- **Pipeline order**: substitute placeholders → Markdig render → HtmlSanitizer (order is a security invariant — sanitizer always runs last)
+- **Filter value escaping**: HTML-encode user-supplied filter values BEFORE placeholder substitution so that a filter value of `<script>` becomes `&lt;script&gt;` in the rendered markdown, not executable HTML
+- **CVE re-verification**: at each phase start (`dotnet list package --vulnerable --include-transitive`)
+- **Allowed HTML after sanitization**: standard text/formatting elements, `<a href="https?:">`, `<img src="https?:">`. Blocked: `<script>`, `<style>`, `on*` event attributes, `javascript:` URIs, `data:` URIs, `<iframe>`, `<object>`, `<embed>`
+
+---
+
+## Integration tests — deferred execution
 
 ### Status
 
+**Phase 3 deferred tests:**
 - **T6** (concurrent reads under reload): **executed and passing** — refactored to use `FakeOperationRegistry`; no Docker required. `FakeOperationRegistry` uses the extracted `RegistrySnapshot` type and identical `Volatile.Read`/`Volatile.Write` pattern as `PostgresOperationRegistry`, so the test verifies the production design.
 - **T7** (Redis pub/sub triggers reload): **code-reviewed; execution deferred to Phase 12**
 - **T8** (invalid schema graceful skip): **code-reviewed; execution deferred to Phase 12**
 
+**Phase 4 deferred tests:**
+- **`DashboardResolver_PostgresAdapter_RealQuery`**: integration test that wires the full stack — `SqlQueryBuilderAdapter` → real Npgsql connection → `DashboardResolver.RenderAsync` — and asserts correct rows are returned. Requires a live PostgreSQL database via Testcontainers. **Code design reviewed; execution deferred to Phase 12.**
+
 ### Why deferred
 
-Phase 3 development environment did not have Docker available. T7 and T8 require Testcontainers (Redis + PostgreSQL). Code was reviewed for correctness against the design in `PHASE_3_PLAN.md §7` and `§8`.
+Phase 3 and Phase 4 development environments did not have Docker available. T7, T8, and `DashboardResolver_PostgresAdapter_RealQuery` require Testcontainers (Redis + PostgreSQL). All deferred tests were code-reviewed for correctness against their respective plan documents.
 
 ### Gate for Phase 12
 
-The Phase 12 (Validation & deliverables) plan MUST include:
-- Item: "Execute Phase 3 deferred integration tests (T7, T8) on Docker-enabled environment"
-- Both tests must pass before declaring Phase 12 complete
-- If they fail, fix in-phase before declaring done
-- Tests are tagged `[Trait("Category","Integration")]` + `[Trait("RequiresDocker","true")]`; run them with `dotnet test --filter "RequiresDocker=true"`
+The Phase 12 (Validation & deliverables) plan MUST include all three deferred tests:
+- **T7**: `Providers.Tests.Registry.ProviderRegistryTests.T7_RedisPubSubTriggersReload`
+- **T8**: `Providers.Tests.Registry.OperationRegistryReloadTests.T8_InvalidSchemaInDb_GracefulSkip_ValidRegistrationsReachable`
+- **`DashboardResolver_PostgresAdapter_RealQuery`**: `Resolver.Tests.Core.DashboardResolverTests.DashboardResolver_PostgresAdapter_RealQuery` — seeds `queryable_sources` row, runs `DashboardResolver.RenderAsync`, asserts non-empty rows
+- All must pass before declaring Phase 12 complete
+- If any fail, fix in-phase before declaring done
+- Tests are tagged `[Trait("Category","Integration")]` + `[Trait("RequiresDocker","true")]`; run with `dotnet test --filter "RequiresDocker=true"`
 
 ### Why T6 was NOT deferred
 

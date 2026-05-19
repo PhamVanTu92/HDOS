@@ -1,0 +1,13 @@
+{
+  "value": 98500,
+  "format": "currency",
+  "label": "Total Revenue",
+  "comparison": {
+    "previousValue": 91000,
+    "delta": 7500,
+    "deltaPercent": 8.241758241758241,
+    "direction": "up",
+    "isGood": true,
+    "periodLabel": "vs previous"
+  }
+}

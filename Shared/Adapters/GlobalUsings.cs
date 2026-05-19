@@ -1,0 +1,15 @@
+global using System.Text.Json;
+global using System.Text.Json.Serialization;
+global using System.Text.Json.Serialization.Metadata;
+global using Microsoft.Extensions.DependencyInjection;
+global using Microsoft.Extensions.Logging;
+global using Microsoft.Extensions.Configuration;
+global using Npgsql;
+global using Dapper;
+global using ReportingPlatform.Contracts.Definitions;
+global using ReportingPlatform.Contracts.TableParams;
+global using ReportingPlatform.Adapters.Abstractions;
+global using ReportingPlatform.Adapters.Models;
+global using ReportingPlatform.Adapters.Config;
+global using ReportingPlatform.Adapters.Serialization;
+global using ReportingPlatform.QueryBuilder.Builder;

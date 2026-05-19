@@ -1,0 +1,30 @@
+{
+  "filterKey": "date",
+  "label": "Date Range",
+  "currentValue": {
+    "from": "2026-05-12",
+    "to": "2026-05-19"
+  },
+  "presets": [
+    {
+      "label": "Today",
+      "value": "today"
+    },
+    {
+      "label": "Last 7 days",
+      "value": "last_7d"
+    },
+    {
+      "label": "This month",
+      "value": "this_month"
+    },
+    {
+      "label": "This quarter",
+      "value": "this_quarter"
+    },
+    {
+      "label": "This year",
+      "value": "this_year"
+    }
+  ]
+}

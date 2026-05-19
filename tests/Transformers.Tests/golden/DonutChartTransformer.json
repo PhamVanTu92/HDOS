@@ -1,0 +1,13 @@
+{
+  "slices": [
+    {
+      "label": "X",
+      "value": 50
+    },
+    {
+      "label": "Y",
+      "value": 50
+    }
+  ],
+  "total": 100
+}

@@ -1,0 +1,27 @@
+{
+  "steps": [
+    {
+      "label": "Visitors",
+      "value": 10000,
+      "percentOfStart": 100
+    },
+    {
+      "label": "Leads",
+      "value": 3000,
+      "percentOfStart": 30,
+      "dropRate": 0.7
+    },
+    {
+      "label": "MQLs",
+      "value": 900,
+      "percentOfStart": 9,
+      "dropRate": 0.7
+    },
+    {
+      "label": "Customers",
+      "value": 180,
+      "percentOfStart": 1.8,
+      "dropRate": 0.8
+    }
+  ]
+}

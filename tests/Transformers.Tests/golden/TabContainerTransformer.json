@@ -1,0 +1,21 @@
+{
+  "tabs": [
+    {
+      "id": "tab1",
+      "label": "Overview",
+      "widgetIds": [
+        "w2",
+        "w3"
+      ],
+      "default": true
+    },
+    {
+      "id": "tab2",
+      "label": "Details",
+      "widgetIds": [
+        "w4"
+      ],
+      "default": false
+    }
+  ]
+}

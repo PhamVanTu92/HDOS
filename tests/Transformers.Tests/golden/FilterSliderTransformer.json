@@ -1,0 +1,10 @@
+{
+  "filterKey": "price",
+  "label": "Price",
+  "min": 0,
+  "max": 1000,
+  "step": 10,
+  "currentValue": 0,
+  "format": "currency",
+  "rangeMode": false
+}

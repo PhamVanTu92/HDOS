@@ -1,0 +1,12 @@
+global using System.Text.Json;
+global using System.Text.Json.Serialization;
+global using Microsoft.Extensions.DependencyInjection;
+global using Microsoft.Extensions.Logging;
+global using ReportingPlatform.Contracts.Definitions;
+global using ReportingPlatform.Contracts.Enums;
+global using ReportingPlatform.Contracts.RenderPayloads.Shared;
+global using ReportingPlatform.Contracts.RenderPayloads.Widgets;
+global using ReportingPlatform.Transformers.Abstractions;
+global using ReportingPlatform.Transformers.Context;
+global using ReportingPlatform.Transformers.Helpers;
+global using ReportingPlatform.Transformers.Serialization;

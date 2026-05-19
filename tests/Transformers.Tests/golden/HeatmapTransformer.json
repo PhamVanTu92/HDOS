@@ -1,0 +1,32 @@
+{
+  "xLabels": [
+    "09:00",
+    "10:00"
+  ],
+  "yLabels": [
+    "Mon",
+    "Tue"
+  ],
+  "cells": [
+    {
+      "x": "09:00",
+      "y": "Mon",
+      "value": 42
+    },
+    {
+      "x": "09:00",
+      "y": "Tue",
+      "value": 31
+    },
+    {
+      "x": "10:00",
+      "y": "Mon",
+      "value": 55
+    }
+  ],
+  "valueRange": {
+    "min": 31,
+    "max": 55
+  },
+  "colorScale": "sequential"
+}

@@ -1,0 +1,42 @@
+{
+  "columns": [
+    {
+      "key": "id",
+      "label": "ID",
+      "type": "number",
+      "sortable": true,
+      "filterable": false,
+      "visible": true
+    },
+    {
+      "key": "name",
+      "label": "Name",
+      "type": "string",
+      "sortable": true,
+      "filterable": true,
+      "filterType": "text",
+      "visible": true
+    }
+  ],
+  "rows": [
+    {
+      "id": 1,
+      "name": "Product 1",
+      "amount": 100
+    },
+    {
+      "id": 2,
+      "name": "Product 2",
+      "amount": 200
+    },
+    {
+      "id": 3,
+      "name": "Product 3",
+      "amount": 300
+    }
+  ],
+  "pagination": {
+    "mode": "server",
+    "totalRows": 150
+  }
+}
