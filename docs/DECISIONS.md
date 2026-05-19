@@ -213,6 +213,25 @@ If a handler gains branching logic in a future phase, per-handler tests must be 
 
 ---
 
+## DLQ inspection (Phase 6 producer, Phase 11 consumer)
+
+Phase 6 Router produces dead-lettered messages (exchange `operation.request.dlq`, queue
+`op-request-dlq`) but does not consume from them.
+
+Phase 11 will implement three admin operations:
+- `admin.dlq.list` — paginated list of DLQ messages with metadata (operation, requestId, tenantId, failureReason, enqueuedAt)
+- `admin.dlq.replay` — re-enqueue selected messages to original priority queue with a fresh `requestId`
+- `admin.dlq.discard` — permanent delete (with audit log entry)
+
+Until Phase 11: ops monitors `op-request-dlq` queue depth via RabbitMQ Management UI
+(port 15672). Grafana alert fires when queue depth > 0 for > 5 minutes.
+
+**Why not Phase 6**: Phase 6 is pure plumbing (produce DLQ messages). DLQ consumption is
+an admin/ops function more naturally grouped with the `admin.*` handler family delivered
+in Phase 11 alongside other administrative operations.
+
+---
+
 ## Object storage — deferred to Phase 11
 
 **Question (Q4):** Which object storage provider handles large exports (widget.tableExport > 5 000 rows), generated PDF reports, and any binary artefacts produced by handler pipelines?

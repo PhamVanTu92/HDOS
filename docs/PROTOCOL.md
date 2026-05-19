@@ -299,9 +299,30 @@ Authorization: Bearer <jwt>
 |---|---|
 | `200 OK` | Terminal result stored in Redis — body is `ResponseDispatchMessage` |
 | `202 Accepted` | Request still in flight — wait on SignalR |
-| `404 Not Found` | TTL expired (> 5 min) or unknown `requestId` |
+| `404 Not Found` | TTL expired (> 5 min), unknown `requestId`, or orphaned request (see below) |
 
 Works regardless of which submission path was used.
+
+#### Orphan detection rule
+
+A request is **orphaned** if it was dropped by the broker (message TTL expired) after the
+idempotency claim also expired, leaving no result in the store and no SignalR push ever
+delivered.
+
+**Client rule**: if `GET /result` returns `404` AND the client's local `queuedAt` timestamp
+satisfies `now − queuedAt > 20 minutes` (= `MessageTtlMs × 2`, default), treat the request
+as orphaned:
+
+1. Surface a "Request lost — please retry" error to the user.
+2. Submit a **new `requestId`** — never reuse the original after an orphan.
+3. Do NOT retry the original `requestId`; the idempotency key has expired and a duplicate
+   execution may have already occurred.
+
+**Server rule** (Phase 7 Response Dispatcher responsibility): `GET /result` MUST return a
+`{ "status": "orphaned" }` discriminator (HTTP 404 body) when it can detect the orphan
+condition (e.g., by checking the idempotency store — key absent + request age > threshold).
+This lets clients distinguish "result not yet stored" (202) from "request genuinely lost" (404
+orphaned) without relying solely on the client-side age heuristic.
 
 ### 3.5 POST /api/v1/requests/{id}/cancel — HTTP cancel
 
@@ -446,6 +467,7 @@ Same `requestId` → same terminal result, regardless of:
 | `BACKPRESSURE` | Queue depth exceeded; system is shedding load | Yes (obey retryAfterMs) |
 | `CANCELLED` | Client cancelled the request | No |
 | `VALIDATION_ERROR` | params failed JSON Schema validation | No |
+| `PARAMS_TOO_LARGE` | params payload exceeds 64 KB limit | No |
 | `DUPLICATE_REQUEST` | requestId already submitted (idempotency) | No — check GET /result |
 | `RATE_LIMITED` | Too many requests | Yes (obey Retry-After) |
 | `UNAUTHORIZED` | Missing or invalid user JWT | No |
@@ -850,7 +872,7 @@ Same validation logic, same error codes, same field-level details. If you see a 
 
 - `params` validated against registered JSON Schema for the operation
 - Unknown `operation`: immediate `OPERATION_NOT_FOUND` (does not enter queue)
-- `params` > 64 KB: immediate rejection (gateway limit)
+- `params` > 64 KB: immediate rejection with error code `PARAMS_TOO_LARGE` (checked before schema validation)
 - `tenantId` must match JWT `tenant` claim
 
 ---

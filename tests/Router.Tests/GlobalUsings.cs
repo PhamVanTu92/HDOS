@@ -1,0 +1,11 @@
+global using System.Text.Json;
+global using MassTransit;
+global using Microsoft.Extensions.Logging;
+global using Microsoft.Extensions.DependencyInjection;
+global using Microsoft.Extensions.Logging.Abstractions;
+global using ReportingPlatform.Contracts.Enums;
+global using ReportingPlatform.Contracts.Messaging;
+global using ReportingPlatform.Contracts.Responses;
+global using ReportingPlatform.Operations.Dispatcher;
+global using ReportingPlatform.Router.Consumers;
+global using Xunit;
