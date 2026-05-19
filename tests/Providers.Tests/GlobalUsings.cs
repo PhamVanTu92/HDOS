@@ -1,0 +1,10 @@
+global using System.Text.Json;
+global using Xunit;
+global using ReportingPlatform.Contracts.Validation;
+global using ReportingPlatform.Contracts.Enums;
+global using ReportingPlatform.Providers.Abstractions;
+global using ReportingPlatform.Providers.Models;
+global using ReportingPlatform.Providers.Matching;
+global using ReportingPlatform.Providers.Validation;
+global using ReportingPlatform.Providers.Registry;
+global using Microsoft.Extensions.Logging.Abstractions;

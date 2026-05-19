@@ -123,6 +123,38 @@ Locked at Phase 2 start. Apply to every project in the solution.
 - Bump immediately when patch versions are available — do not defer security patches across phase boundaries
 - Patches that bump major versions require a brief compatibility review note in the phase plan
 
+### Secret hashing
+
+- **Provider `clientSecret`**: BCrypt work factor 12 (~250ms verify cost). Package: `BCrypt.Net-Next`. `BCrypt.HashPassword(secret, workFactor: 12)` at registration time; `BCrypt.Verify(clientSecret, storedHash)` at authentication time. The deliberate slowness resists offline brute force if `provider_registry` is ever exfiltrated.
+- **User passwords**: NEVER stored. Authentication is federated via external IdP issuing JWTs. This platform is not an identity provider.
+- **JWT signing keys**: managed in Phase 8 (Provider Bridge). Separate from this decision.
+
+---
+
+## Phase 3 integration tests — deferred execution
+
+### Status
+
+- **T6** (concurrent reads under reload): **executed and passing** — refactored to use `FakeOperationRegistry`; no Docker required. `FakeOperationRegistry` uses the extracted `RegistrySnapshot` type and identical `Volatile.Read`/`Volatile.Write` pattern as `PostgresOperationRegistry`, so the test verifies the production design.
+- **T7** (Redis pub/sub triggers reload): **code-reviewed; execution deferred to Phase 12**
+- **T8** (invalid schema graceful skip): **code-reviewed; execution deferred to Phase 12**
+
+### Why deferred
+
+Phase 3 development environment did not have Docker available. T7 and T8 require Testcontainers (Redis + PostgreSQL). Code was reviewed for correctness against the design in `PHASE_3_PLAN.md §7` and `§8`.
+
+### Gate for Phase 12
+
+The Phase 12 (Validation & deliverables) plan MUST include:
+- Item: "Execute Phase 3 deferred integration tests (T7, T8) on Docker-enabled environment"
+- Both tests must pass before declaring Phase 12 complete
+- If they fail, fix in-phase before declaring done
+- Tests are tagged `[Trait("Category","Integration")]` + `[Trait("RequiresDocker","true")]`; run them with `dotnet test --filter "RequiresDocker=true"`
+
+### Why T6 was NOT deferred
+
+T6 verifies the core concurrency invariant of `IOperationRegistry`: no torn state under concurrent reads during snapshot swap. It is the highest-risk test of Phase 3 — a bug here means production stale-reads or `NullReferenceException` under load. It does not inherently require Docker; the snapshot pattern is entirely in-memory. Refactoring to `FakeOperationRegistry` preserves verification value while removing the Docker dependency.
+
 ---
 
 ## Phase 2 work items (surfaced during Phase 1.5 review)

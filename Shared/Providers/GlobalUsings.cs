@@ -1,0 +1,15 @@
+global using System.Text.Json;
+global using System.Text.Json.Nodes;
+global using System.Text.Json.Serialization;
+global using System.Diagnostics;
+global using System.Diagnostics.Metrics;
+global using Microsoft.Extensions.Logging;
+global using Microsoft.Extensions.DependencyInjection;
+global using Microsoft.Extensions.Configuration;
+global using Json.Schema;
+global using Npgsql;
+global using StackExchange.Redis;
+global using ReportingPlatform.Contracts.Validation;
+global using ReportingPlatform.Contracts.Enums;
+global using ReportingPlatform.Providers.Abstractions;
+global using ReportingPlatform.Providers.Models;
