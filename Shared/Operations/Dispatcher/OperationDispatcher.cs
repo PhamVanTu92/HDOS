@@ -145,12 +145,13 @@ public sealed class OperationDispatcher
         IProgress<ProgressUpdate>? progress) =>
         new()
         {
-            RequestId   = message.RequestId,
-            TenantId    = message.TenantId,
-            UserId      = message.UserId,
-            Params      = paramsEl,
-            Progress    = progress,
-            Traceparent = message.Traceparent,
+            RequestId       = message.RequestId,
+            TenantId        = message.TenantId,
+            UserId          = message.UserId,
+            Params          = paramsEl,
+            Progress        = progress,
+            Traceparent     = message.Traceparent,
+            TimeoutAtUnixMs = message.TimeoutAtUnixMs,
         };
 
     private static OperationResponseMessage Fail(

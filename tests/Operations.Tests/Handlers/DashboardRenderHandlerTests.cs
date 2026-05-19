@@ -22,7 +22,10 @@ public sealed class DashboardRenderHandlerTests
             string tenantId, string dashboardCode,
             IReadOnlyDictionary<string, JsonElement> filters,
             IReadOnlyDictionary<string, TablePaginationParams>? tableParams = null,
-            CancellationToken ct = default) =>
+            CancellationToken ct = default,
+            string? callerRequestId = null,
+            string? callerUserId = null,
+            DateTimeOffset? callerDeadline = null) =>
             Task.FromResult(_payload);
     }
 
@@ -43,11 +46,12 @@ public sealed class DashboardRenderHandlerTests
 
     private static OperationHandlerContext MakeContext(string paramsJson) => new()
     {
-        RequestId   = "req-1",
-        TenantId    = "t1",
-        UserId      = "u1",
-        Params      = JsonDocument.Parse(paramsJson).RootElement,
-        Traceparent = string.Empty,
+        RequestId       = "req-1",
+        TenantId        = "t1",
+        UserId          = "u1",
+        Params          = JsonDocument.Parse(paramsJson).RootElement,
+        Traceparent     = string.Empty,
+        TimeoutAtUnixMs = DateTimeOffset.UtcNow.AddMinutes(5).ToUnixTimeMilliseconds(),
     };
 
     // ------------------------------------------------------------------

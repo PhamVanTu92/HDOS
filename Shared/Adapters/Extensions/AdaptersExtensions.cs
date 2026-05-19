@@ -6,10 +6,13 @@ namespace ReportingPlatform.Adapters.Extensions;
 public static class AdaptersExtensions
 {
     /// <summary>
-    /// Registers adapter services: three SQL adapters + the factory.
+    /// Registers adapter services: three SQL adapters + ExternalProviderAdapter + the factory.
     /// Prerequisites (must be registered by the host before calling this):
     ///   - <see cref="SqlKataQueryBuilder"/> (from AddPlatformQueryBuilder)
     ///   - <see cref="NpgsqlDataSource"/> keyed or registered for raw SQL access
+    ///   - <see cref="INestedRequestSubmitter"/> (registered in Operations via AddPlatformOperations)
+    ///   - <see cref="IResultReader"/> (registered in Caching via AddPlatformCaching)
+    ///   - <see cref="ISubscriber"/> (registered via AddStackExchangeRedis)
     /// </summary>
     public static IServiceCollection AddPlatformAdapters(
         this IServiceCollection services,
@@ -34,6 +37,7 @@ public static class AdaptersExtensions
             new TimescaleAdapter(
                 dataSource,
                 sp.GetRequiredService<ILogger<TimescaleAdapter>>()));
+        services.AddSingleton<ExternalProviderAdapter>();
         services.AddSingleton<DatasourceAdapterFactory>();
 
         return services;

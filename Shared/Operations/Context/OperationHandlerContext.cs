@@ -18,4 +18,7 @@ public sealed record OperationHandlerContext
 
     /// <summary>W3C traceparent from originating request. Restore for child Activity spans.</summary>
     public required string Traceparent { get; init; }
+
+    /// <summary>Unix epoch milliseconds deadline from the originating request. Used by nested adapters to clamp their own timeout.</summary>
+    public long TimeoutAtUnixMs { get; init; }
 }

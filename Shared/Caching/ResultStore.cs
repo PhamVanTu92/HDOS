@@ -4,7 +4,7 @@ namespace ReportingPlatform.Caching;
 
 // Stores the final serialized response for a completed request. TTL=5min so
 // late-joining SSE clients can poll the result without re-executing the operation.
-public sealed class ResultStore(IDatabase redis)
+public sealed class ResultStore(IDatabase redis) : IResultReader
 {
     private static readonly TimeSpan Ttl = TimeSpan.FromMinutes(5);
 

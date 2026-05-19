@@ -5,4 +5,5 @@ namespace ReportingPlatform.Adapters.Serialization;
     DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     PropertyNameCaseInsensitive = true)]
 [JsonSerializable(typeof(DatasourceConfig))]
+[JsonSerializable(typeof(ExternalProviderConfig))]
 internal sealed partial class AdaptersJsonContext : JsonSerializerContext;

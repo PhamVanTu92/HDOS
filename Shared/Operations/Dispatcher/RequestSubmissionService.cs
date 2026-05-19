@@ -1,12 +1,13 @@
 using ReportingPlatform.Caching;
 using ReportingPlatform.Contracts.Envelopes;
+using ReportingPlatform.Contracts.Operations;
 using ReportingPlatform.Contracts.Store;
 using ReportingPlatform.Providers.Abstractions;
 using StackExchange.Redis;
 
 namespace ReportingPlatform.Operations.Dispatcher;
 
-public sealed class RequestSubmissionService
+public sealed class RequestSubmissionService : INestedRequestSubmitter
 {
     private const int MaxParamsSizeBytes = 65_536;
     private const int MaxTimeoutMs       = 300_000; // 5 minutes hard cap

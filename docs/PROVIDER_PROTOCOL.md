@@ -358,6 +358,7 @@ This document is the **single source of truth** for teams building external prov
     - [ ] No internal infrastructure details in error messages
 
 16. [Polyglot Guide](#16-polyglot-guide)
+17. [Provider Payload Contract for Dashboard Widgets](#17-provider-payload-contract-for-dashboard-widgets)
     - 16.1 Python reference implementation: `samples/PythonProviderSample/`
       - grpc library: `grpcio` + `grpcio-tools`
       - Proto generation: `python -m grpc_tools.protoc -I proto --python_out=. --grpc_python_out=. provider.proto`
@@ -383,3 +384,88 @@ This document is the **single source of truth** for teams building external prov
     - 16.3 Go reference: generate from proto using `protoc-gen-go-grpc`
     - 16.4 Rust reference: `tonic` crate + `prost`
     - 16.5 Testing without full platform: use `grpc-mock` or in-repo Bridge stub (see `tests/ProviderBridge.Tests/`)
+
+17. [Provider Payload Contract for Dashboard Widgets](#17-provider-payload-contract-for-dashboard-widgets)
+    - 17.1 When is this contract used?
+    - 17.2 Payload JSON structure
+    - 17.3 Column schema (optional)
+    - 17.4 Failure case
+    - 17.5 Datasource definition example
+
+---
+
+## 17. Provider Payload Contract for Dashboard Widgets
+
+This section applies when a dashboard datasource has `type: "external_provider"`. The platform's `ExternalProviderAdapter` calls your operation and maps the `payloadJson` from your `Terminal` response into widget rows. Your payload MUST follow the contract described here.
+
+### 17.1 When is this contract used?
+
+Every time a widget backed by an `external_provider` datasource is rendered:
+
+```
+Dashboard render → ExternalProviderAdapter → your operation → Terminal.payloadJson → widget rows
+```
+
+The `payloadJson` field in your `Terminal` message is the sole data source for the widget.
+
+### 17.2 Payload JSON structure
+
+```json
+{
+  "rows": [
+    { "columnName1": "value", "columnName2": 42.5 },
+    { "columnName1": "value2", "columnName2": 17.0 }
+  ],
+  "totalRows": 2,
+  "schema": [
+    { "name": "columnName1", "type": "string" },
+    { "name": "columnName2", "type": "number" }
+  ]
+}
+```
+
+| Field | Required | Type | Notes |
+|-------|----------|------|-------|
+| `rows` | **Yes** (unless `rowsPath` set) | Array of objects | Each object is one row; keys are column names |
+| `totalRows` | No | Integer | For paginated widgets; omit if not paginated |
+| `schema` | No | Array of `{name, type}` | Column metadata; used by AdvancedTable widget for header rendering |
+
+**Alternate `rowsPath`**: if the datasource `connectionConfig.rowsPath` is set (e.g. `"data"`), the adapter reads `payload["data"]` as the rows array instead of `payload["rows"]`. Use this when your provider's natural response structure uses a different key.
+
+### 17.3 Column schema (optional)
+
+```json
+"schema": [
+  { "name": "transactionId", "type": "string" },
+  { "name": "score",          "type": "number" },
+  { "name": "riskBand",       "type": "string" },
+  { "name": "timestamp",      "type": "datetime" }
+]
+```
+
+Recognized types: `string`, `number`, `integer`, `boolean`, `datetime`. Unknown types are passed through as-is — the widget transformer handles display.
+
+### 17.4 Failure case
+
+If your operation cannot compute a result, send `Terminal { status: FAILED }` with an `Error` object. The platform maps this to `AdapterException("PROVIDER_FAILED", errorCode)`, which renders the widget with an error state — no rows are shown.
+
+Do NOT return an empty `rows: []` to signal failure; use `FAILED` status. An empty rows array is valid (zero-result query).
+
+### 17.5 Datasource definition example
+
+Stored in Postgres `datasources.connection_config` JSONB:
+
+```json
+{
+  "operationName": "ml.fraud.score",
+  "providerId":    "fraud-svc-v1",
+  "paramMapping": {
+    "transactionId": "{{filters.transaction_id}}",
+    "amount":        "{{filters.amount}}"
+  },
+  "rowsPath":  null,
+  "timeoutMs": 3000
+}
+```
+
+The `paramMapping` maps widget filter values into provider params using `{{filters.key}}` tokens. Unknown filter keys resolve to JSON `null`. Literal string values (no `{{}}`) are passed through as-is.

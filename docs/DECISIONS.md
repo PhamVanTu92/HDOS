@@ -49,6 +49,42 @@ When a `connectionId`-targeted push fails (connection gone), the platform falls 
 
 ---
 
+## OQ-P10-A — AdapterRequest.ParentRequestId placement
+
+**Decision**: Added `ParentRequestId`, `UserId`, and `ParentDeadline` directly to `AdapterRequest` as nullable fields.
+
+**Alternative rejected**: A separate `AdapterContext` wrapper that all call sites pass alongside the request. Rejected because it would change every adapter call site (SQL adapters, dropdown fetch) for fields they never use. Adding nullable fields to the existing record has zero impact on SQL adapters.
+
+**Implication**: SQL adapters ignore the three new fields. `ExternalProviderAdapter` reads them. Any future adapter type follows the same pattern.
+
+---
+
+## OQ-P10-B — ProviderId hint in envelope
+
+**Decision**: Include `providerId` as an optional field in `ExternalProviderConfig` (`connectionConfig.providerId`). The adapter currently does NOT pass it to the nested `RequestEnvelope` because `RequestEnvelope` has no `ProviderId` field. If Bridge-side routing by `providerId` is needed, the field in `OperationRequestMessage` must be added in a future phase.
+
+**Status**: `connectionConfig.providerId` is parsed and stored but not yet used. Deferred to Phase 11 (Bridge routing enhancement).
+
+---
+
+## OQ-P10-C — Nested timeout vs cache TTL independence
+
+**Decision**: `timeoutMs` in `connectionConfig` governs fetch deadline only. Widget `cacheSeconds` governs cache TTL only. These are independent: a slow operation can be cached for a long time; a fast operation can have a short cache.
+
+**Implication**: `ExternalProviderAdapter.FetchAsync` computes `effectiveTimeout = min(config.timeoutMs, parentRemaining)`. Cache store/eviction is entirely handled by `DashboardResolver` and `WidgetCacheService`, not by the adapter.
+
+---
+
+## OQ-P10-D — ExternalProviderConfig validation at Resolve() vs FetchAsync()
+
+**Decision**: Validate `operationName` and `paramMapping` presence at `DatasourceAdapterFactory.Resolve()` — fail fast at dashboard load time (when the resolver first resolves the adapter), not per-render.
+
+**Reasoning**: `Resolve()` is called once per widget per render. Config errors should surface immediately as `PROVIDER_CONFIG_INVALID` at the widget level, not silently succeed until the first actual data fetch. Per-render failure would also make the error harder to distinguish from a network/provider failure.
+
+**Implication**: `ExternalProviderAdapter.FetchAsync` still has a secondary parse-and-catch for malformed JSON (defense-in-depth), but structural validation (required fields) is the factory's responsibility.
+
+---
+
 ## Dashboard version field semantics
 
 The `version` field on `DashboardRenderPayload` increments every time an admin saves changes to the dashboard definition (via `metadata.dashboards.upsert`).

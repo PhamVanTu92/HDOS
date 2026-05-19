@@ -47,7 +47,10 @@ public sealed class DashboardResolver : IDashboardResolver
         string dashboardCode,
         IReadOnlyDictionary<string, JsonElement> filters,
         IReadOnlyDictionary<string, TablePaginationParams>? tableParams = null,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        string? callerRequestId = null,
+        string? callerUserId = null,
+        DateTimeOffset? callerDeadline = null)
     {
         var sw = Stopwatch.StartNew();
 
@@ -73,7 +76,8 @@ public sealed class DashboardResolver : IDashboardResolver
         var tasks = widgets.Select(widget => RenderWidgetAsync(
             tenantId, dashboardCode, version, widget,
             datasources.TryGetValue(widget.DatasourceId, out var ds) ? ds : null,
-            filters, tableParams, dropdownOptions, filtersHash, ct));
+            filters, tableParams, dropdownOptions, filtersHash,
+            callerRequestId, callerUserId, callerDeadline, ct));
 
         var envelopes = await Task.WhenAll(tasks);
 
@@ -231,6 +235,9 @@ public sealed class DashboardResolver : IDashboardResolver
         IReadOnlyDictionary<string, TablePaginationParams>? tableParams,
         IReadOnlyDictionary<string, IReadOnlyList<FilterOption>> dropdownOptions,
         string filtersHash,
+        string? callerRequestId,
+        string? callerUserId,
+        DateTimeOffset? callerDeadline,
         CancellationToken ct)
     {
         var startedAt = DateTimeOffset.UtcNow;
@@ -248,6 +255,7 @@ public sealed class DashboardResolver : IDashboardResolver
             return await RenderWidgetCoreAsync(
                 tenantId, dashCode, version, widget, datasource,
                 filters, tableParams, dropdownOptions,
+                callerRequestId, callerUserId, callerDeadline,
                 cacheKey, startedAt, sw, ct);
         }
         catch (Exception ex)
@@ -272,6 +280,9 @@ public sealed class DashboardResolver : IDashboardResolver
         IReadOnlyDictionary<string, JsonElement> filters,
         IReadOnlyDictionary<string, TablePaginationParams>? tableParams,
         IReadOnlyDictionary<string, IReadOnlyList<FilterOption>> dropdownOptions,
+        string? callerRequestId,
+        string? callerUserId,
+        DateTimeOffset? callerDeadline,
         string cacheKey,
         DateTimeOffset startedAt,
         Stopwatch sw,
@@ -301,10 +312,13 @@ public sealed class DashboardResolver : IDashboardResolver
 
             var request = new Adapters.Models.AdapterRequest
             {
-                TenantId   = tenantId,
-                Datasource = datasource,
-                Filters    = filters,
-                Pagination = tableParams_,
+                TenantId        = tenantId,
+                Datasource      = datasource,
+                Filters         = filters,
+                Pagination      = tableParams_,
+                ParentRequestId = callerRequestId,
+                UserId          = callerUserId,
+                ParentDeadline  = callerDeadline,
             };
 
             var adapter = _adapters.Resolve(datasource);

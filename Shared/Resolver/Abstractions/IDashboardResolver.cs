@@ -11,5 +11,8 @@ public interface IDashboardResolver
         string dashboardCode,
         IReadOnlyDictionary<string, JsonElement> filters,
         IReadOnlyDictionary<string, TablePaginationParams>? tableParams = null,
-        CancellationToken ct = default);
+        CancellationToken ct = default,
+        string? callerRequestId = null,
+        string? callerUserId = null,
+        DateTimeOffset? callerDeadline = null);
 }
