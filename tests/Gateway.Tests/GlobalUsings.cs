@@ -1,0 +1,24 @@
+global using System.Collections.Concurrent;
+global using System.Text.Json;
+global using System.Threading.Channels;
+global using Microsoft.AspNetCore.SignalR;
+global using Microsoft.Extensions.Logging.Abstractions;
+global using Microsoft.Extensions.Options;
+global using ReportingPlatform.Caching;
+global using ReportingPlatform.Contracts.Enums;
+global using ReportingPlatform.Contracts.Envelopes;
+global using ReportingPlatform.Contracts.Exceptions;
+global using ReportingPlatform.Contracts.Messaging;
+global using ReportingPlatform.Contracts.Store;
+global using ReportingPlatform.Contracts.Validation;
+global using ReportingPlatform.Gateway.Tests.Helpers;
+global using ReportingPlatform.HubContracts;
+global using ReportingPlatform.Operations.Dispatcher;
+global using ReportingPlatform.RequestApi.Services;
+global using ReportingPlatform.RequestApi.Sse;
+global using ReportingPlatform.ResponseDispatcher.Options;
+global using ReportingPlatform.ResponseDispatcher.Services;
+global using StackExchange.Redis;
+global using Xunit;
+// NSubstitute — used in GatewayTestHelpers for IDatabase substitution
+global using NSubstitute;

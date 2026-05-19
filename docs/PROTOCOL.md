@@ -295,11 +295,28 @@ GET /api/v1/requests/{id}/result
 Authorization: Bearer <jwt>
 ```
 
-| Response | Meaning |
-|---|---|
-| `200 OK` | Terminal result stored in Redis — body is `ResponseDispatchMessage` |
-| `202 Accepted` | Request still in flight — wait on SignalR |
-| `404 Not Found` | TTL expired (> 5 min), unknown `requestId`, or orphaned request (see below) |
+All three response codes return a **uniform JSON envelope** with a `status` discriminator:
+
+| HTTP | `status` field | Meaning |
+|---|---|---|
+| `200 OK` | `"completed"` | Terminal result in Redis — `result` field contains `ResponseDispatchMessage` |
+| `202 Accepted` | `"in_flight"` | Still processing — `submittedAt` field present; wait on SignalR |
+| `404 Not Found` | `"orphaned"` | Was submitted, result lost (broker TTL + idempotency expired) — generate new `requestId` |
+| `404 Not Found` | `"not_found"` | Unknown `requestId` — never submitted or > 30 min ago |
+
+```json
+// 200 OK
+{ "status": "completed", "requestId": "01HQ7...", "result": { /* ResponseDispatchMessage */ } }
+
+// 202 Accepted
+{ "status": "in_flight", "requestId": "01HQ7...", "submittedAt": "2026-05-19T10:00:00.000Z" }
+
+// 404 Not Found (orphaned)
+{ "status": "orphaned", "requestId": "01HQ7..." }
+
+// 404 Not Found (unknown)
+{ "status": "not_found", "requestId": "01HQ7..." }
+```
 
 Works regardless of which submission path was used.
 
@@ -682,11 +699,13 @@ event: progress
 data: {"requestId":"...","percent":42,"message":"Processing region North...","tsUnixMs":...}
 
 event: terminal
-data: {"requestId":"...","status":"done"}
+data: {"requestId":"...","resultUrl":"/api/v1/requests/{requestId}/result"}
 
 ```
 
-The `terminal` event is a signal to close the SSE stream. The actual terminal payload arrives via SignalR (`RequestCompleted`/`RequestFailed`). Never use the `terminal` SSE event as the source of truth for the result.
+The `terminal` event is a signal to close the SSE stream. The actual terminal payload arrives via SignalR (`RequestCompleted`/`RequestFailed`/`RequestCancelled`). Never use the `terminal` SSE event as the source of truth for the result.
+
+**`resultUrl` fallback**: if no SignalR push arrives within 5 seconds of the `terminal` event (e.g., Hub connection dropped at the exact moment of dispatch), fetch the result directly via `GET {resultUrl}`. The response will have `{ "status": "completed", "result": {...} }` — see §3.4.
 
 ### 7.5 Stream lifecycle
 

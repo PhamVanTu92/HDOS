@@ -283,7 +283,8 @@ This document is the **single source of truth** for teams building external prov
      }
      ```
    - 9.2 Wildcard patterns: `"ml.fraud.*"` matches `ml.fraud.score` and `ml.fraud.batchScore`
-     - Most specific match wins: `"ml.fraud.score"` beats `"ml.fraud.*"` beats `"ml.*"`
+     - Trailing `.*` matches exactly one segment; trailing `.**` matches one or more segments (greedy).
+     - Most specific match wins: `"ml.fraud.score"` beats `"ml.fraud.*"` beats `"ml.**"`
    - 9.3 Marking operations as cacheable: `cacheable: true` + `cacheSeconds` in `DatasourceDefinition`
    - 9.4 Marking operations as idempotent: `idempotent: true` — enables Bridge retry on transient failure
    - 9.5 JSON Schema examples (see `samples/` for full examples)

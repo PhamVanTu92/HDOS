@@ -19,8 +19,9 @@ public static class OperationsExtensions
         // Idempotency (wraps IdempotencyStore)
         services.AddSingleton<IIdempotencyService, IdempotencyServiceAdapter>();
 
-        // Bus adapter (wraps MassTransit IBus)
+        // Bus adapters (wraps MassTransit IBus / IPublishEndpoint)
         services.AddSingleton<IOperationBus, MassTransitOperationBus>();
+        services.AddSingleton<ICancelBus, MassTransitCancelBus>();
 
         // Registry + dispatcher (internal, but registered via public extension)
         services.AddSingleton<OperationHandlerRegistry>(sp =>

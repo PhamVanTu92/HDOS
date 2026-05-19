@@ -213,6 +213,27 @@ If a handler gains branching logic in a future phase, per-handler tests must be 
 
 ---
 
+## Worker architecture decision
+
+Single `Operation.Router.Worker` handles all operation types via `OperationDispatcher`.
+
+**Rationale**:
+- v1 target: ~hundreds req/s — single worker with 3 priority queues sufficient
+- Operation isolation already achieved via priority queues (admin/metadata typically low; dashboard query normal/high)
+- Simpler ops surface: 1 service to deploy, monitor, scale
+- DI complexity contained: all handlers in one composition root
+
+**Decision rejected**: separate `Query.Worker` / `Metadata.Worker` / `Admin.Worker`.
+Reason: speculative isolation without measurement. Extract later if production traffic shows specific worker types interfering with each other.
+
+**Re-evaluation triggers** (when to revisit):
+- Metadata operation p99 > 500 ms sustained (DB write contention)
+- Admin operation causing Query throughput drops > 20%
+- Per-worker horizontal scaling needed (e.g., 10× Query workers but 1× Metadata)
+- Different VM/container resource profiles required per operation type
+
+---
+
 ## DLQ inspection (Phase 6 producer, Phase 11 consumer)
 
 Phase 6 Router produces dead-lettered messages (exchange `operation.request.dlq`, queue
@@ -264,6 +285,86 @@ public interface IObjectStorageClient
 - IAM policy for production S3 must grant `PutObject` + `GetObject` on the exports prefix only — no `DeleteObject` from the app role (lifecycle policy handles cleanup).
 
 **Why not Phase 5**: no CI/CD pipeline for MinIO Testcontainers yet; handler interface contract not finalised; Phase 11 is the designated integration & storage phase.
+
+---
+
+---
+
+## Phase 7 — Gateway design decisions
+
+### Issue X: `RequestSubmissionService.SubmitAsync` signature (confirmed)
+
+**Confirmed signature** (read from `Shared/Operations/Dispatcher/RequestSubmissionService.cs` after Phase 5):
+```csharp
+public async Task<SubmitAck> SubmitAsync(
+    RequestEnvelope envelope,
+    string? connectionId,
+    CancellationToken ct = default)
+```
+
+`SubmissionContext` **does not exist** as a type anywhere in the codebase. Early planning notes mentioned it as a canonical pattern, but it was never implemented — `connectionId` is passed as a plain `string?`. The Phase 7 plan's invocation patterns in §2.2, §3.1, and §4.1 all use `SubmitAsync(envelope, connectionId, ct)`, which matches the actual signature exactly.
+
+**Phase 7 additions** to this method (documented in PHASE_7_PLAN.md §4.2):
+- `OwnerStore` dependency (new constructor parameter)
+- `IDatabase redis` dependency (new constructor parameter — for submission log + active-progress Set)
+- Owner record write (Step 6b)
+- Submission log write (`rp:sublog:{requestId}`, TTL = 30 min)
+- Active-progress SADD (`rp:active-progress`, when `options.progress: true`)
+- `ProgressStreamUrl` corrected to `/sse/requests/{requestId}/progress` (was `/api/v1/progress/{requestId}`)
+
+---
+
+### Phase 7 open questions — all resolved
+
+| # | Decision |
+|---|---|
+| OQ1 | **`Progress.Dispatcher.Worker` is a standalone process** — separate service, not embedded in `Request.Api`. Redis pub/sub hop is negligible; service boundary enables independent horizontal scaling of progress relay without scaling the HTTP API. |
+| OQ2 | **`Shared/HubContracts`** — new shared project containing `IMainHubClient`, `ResponseDispatchPushMessage` (MessagePack-annotated), and the `MainHub` forward declaration. `Response.Dispatcher.Worker` references `Shared/HubContracts`, not `Realtime.Hub`. `IHubContext<MainHub, IMainHubClient>` provides compile-time type safety on all push method names — no string `"RequestCompleted"` anywhere in production code. |
+| OQ3 | **`AddPlatformAuth` in `Shared/Telemetry`** — lives as `AuthExtensions.cs` in the existing telemetry assembly. Extracted to a new `Shared/Auth` project in Phase 11 when API-key authentication is added. |
+| OQ4 | **Independent rate limits per service** — `Request.Api` and `Realtime.Hub` each enforce their own sliding-window limits. Cross-transport unified rate limiting (single Redis counter for HTTP + Hub combined) is deferred to Phase 11. Accepted risk: a user could submit 100/min via HTTP + 100/min via Hub = 200/min combined. Acceptable for Phase 7. |
+| OQ5 | **SSE heartbeat every 30s** — `ping` event (empty data) sent every 30 seconds to prevent proxy/load-balancer idle disconnection. Implemented as a parallel `Task.Delay(30s)` loop in the SSE handler writing `: ping\n\n` (SSE comment) to the response stream. |
+
+---
+
+### Phase 7 — Strongly-typed Hub push (no string method names)
+
+`MainHub` extends `Hub<IMainHubClient>` (defined in `Shared/HubContracts`). This eliminates all string-based method invocations on the SignalR response path:
+
+- **Before (unsafe)**: `await _hubContext.Clients.Client(id).SendAsync("RequestCompleted", push, ct)`
+- **After (safe)**: `await _hubContext.Clients.Client(id).RequestCompleted(push)`
+
+The compiler catches typos, parameter count mismatches, and type mismatches at build time. Any rename of a push method is caught as a `CS0117` build error across all call sites.
+
+---
+
+### Phase 7 — GET /result uniform response envelope
+
+`GET /api/v1/requests/{id}/result` returns a consistent JSON envelope for all 3 outcomes:
+
+```json
+// 200 OK
+{ "status": "completed", "requestId": "...", "result": { /* ResponseDispatchMessage */ } }
+
+// 202 Accepted
+{ "status": "in_flight", "requestId": "...", "submittedAt": "ISO-8601" }
+
+// 404 Not Found
+{ "status": "orphaned"|"not_found", "requestId": "..." }
+```
+
+Clients branch on `status` string, not HTTP status code. This makes the API contract stable against future HTTP status code changes and simplifies frontend branching logic.
+
+---
+
+### Phase 7 — Orphan detection via submission log
+
+Server-side orphan detection (`GET /result` returning `{ "status": "orphaned" }`) requires a third Redis artifact beyond the owner-store record and idempotency key. Both of those expire too early relative to the orphan detection window.
+
+**Decision**: write `rp:sublog:{requestId}` (TTL = `MessageTtlMs × 3` = 30 min) in `RequestSubmissionService.SubmitAsync` alongside the idempotency key. This key is a simple existence marker — its presence proves the request was submitted. Its absence (after 30 min) means the request was either never submitted or orphaned beyond the detection window.
+
+`OrphanDetector.CheckAsync` returns:
+- `"orphaned"` — submission log key exists (submitted, result lost within detection window)
+- `"not_found"` — submission log key absent (never submitted, or > 30 min ago)
 
 ---
 

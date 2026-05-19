@@ -1,0 +1,16 @@
+global using System.Security.Claims;
+global using System.Text.Json;
+global using System.Threading.Channels;
+global using Microsoft.AspNetCore.Authentication.JwtBearer;
+global using Microsoft.AspNetCore.Authorization;
+global using Microsoft.AspNetCore.Mvc;
+global using Microsoft.Extensions.Options;
+global using ReportingPlatform.Caching;
+global using ReportingPlatform.Contracts.Envelopes;
+global using ReportingPlatform.Contracts.Exceptions;
+global using ReportingPlatform.Contracts.Store;
+global using ReportingPlatform.Operations.Dispatcher;
+global using ReportingPlatform.RequestApi.Options;
+global using ReportingPlatform.RequestApi.Services;
+global using ReportingPlatform.RequestApi.Sse;
+global using StackExchange.Redis;

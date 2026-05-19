@@ -64,6 +64,7 @@ public sealed class OperationDispatcher
             return new OperationResponseMessage
             {
                 RequestId     = message.RequestId,
+                Operation     = message.Operation,
                 Status        = ResponseStatus.Failed,
                 TenantId      = message.TenantId,
                 UserId        = message.UserId,
@@ -109,6 +110,7 @@ public sealed class OperationDispatcher
             return new OperationResponseMessage
             {
                 RequestId     = message.RequestId,
+                Operation     = message.Operation,
                 Status        = ResponseStatus.Done,
                 PayloadJson   = result.GetRawText(),
                 TenantId      = message.TenantId,
@@ -160,6 +162,7 @@ public sealed class OperationDispatcher
         new()
         {
             RequestId     = message.RequestId,
+            Operation     = message.Operation,
             Status        = status,
             TenantId      = message.TenantId,
             UserId        = message.UserId,

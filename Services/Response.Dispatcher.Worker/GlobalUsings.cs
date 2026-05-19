@@ -1,0 +1,12 @@
+global using MassTransit;
+global using Microsoft.AspNetCore.SignalR;
+global using Microsoft.Extensions.Logging;
+global using Microsoft.Extensions.Options;
+global using ReportingPlatform.Caching;
+global using ReportingPlatform.Contracts.Enums;
+global using ReportingPlatform.Contracts.Messaging;
+global using ReportingPlatform.Contracts.Store;
+global using ReportingPlatform.HubContracts;
+global using ReportingPlatform.ResponseDispatcher.Options;
+global using ReportingPlatform.ResponseDispatcher.Services;
+global using StackExchange.Redis;
