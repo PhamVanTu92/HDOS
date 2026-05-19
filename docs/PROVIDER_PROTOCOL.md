@@ -320,7 +320,7 @@ This document is the **single source of truth** for teams building external prov
     - 12.6 **Multiple instances**: competing consumers on same queue; each message goes to exactly one instance.
 
 13. [Reconnection Protocol](#13-reconnection-protocol)
-    - 13.1 SDK: automatic exponential backoff — 1s, 2s, 4s, 8s, max 60s. The SDK suppresses reconnection attempts when the last stream close reason was `credentials_revoked` — alerting your application via an `OnCredentialsRevoked` callback instead.
+    - 13.1 SDK: automatic exponential backoff — 1s, 2s, 4s, 8s, max 30s. The SDK suppresses reconnection attempts when the last stream close reason was `credentials_revoked` — alerting your application via an `OnCredentialsRevoked` callback instead.
     - 13.2 Non-SDK reconnection sequence:
       1. Re-fetch JWT from token endpoint (`POST /api/v1/providers/token`)
       2. Create new gRPC channel with new JWT

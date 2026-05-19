@@ -1,0 +1,49 @@
+# Overlay: docker compose -f docker-compose.yml -f docker-compose.providers.yml up
+# DEV ONLY — secrets as environment variables.
+# See samples/*/README.md §Production secret delivery for production guidance.
+
+services:
+  dotnet-provider-sample:
+    build:
+      context: .
+      dockerfile: samples/DotnetProviderSample/Dockerfile
+    environment:
+      Provider__ProviderId:    "ml-team-fraud"
+      Provider__ClientId:      "${ML_FRAUD_CLIENT_ID:-}"
+      Provider__ClientSecret:  "${ML_FRAUD_CLIENT_SECRET:-}"
+      Provider__TokenEndpoint: "http://request-api:8080/api/v1/providers/token"
+      Provider__BridgeEndpoint: "http://provider-bridge:5400"
+      Provider__AdminBase:     "http://request-api:8080/api/v1/admin"
+      ASPNETCORE_ENVIRONMENT:  "Development"
+    depends_on:
+      - request-api
+      - provider-bridge
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    networks:
+      - platform
+
+  python-provider-sample:
+    build:
+      context: samples/PythonProviderSample
+      dockerfile: Dockerfile
+    environment:
+      PROVIDER_ID:      "forecast-python"
+      CLIENT_ID:        "${FORECAST_CLIENT_ID:-}"
+      CLIENT_SECRET:    "${FORECAST_CLIENT_SECRET:-}"
+      TOKEN_ENDPOINT:   "http://request-api:8080/api/v1/providers/token"
+      BRIDGE_ENDPOINT:  "provider-bridge:5400"
+      ADMIN_BASE:       "http://request-api:8080/api/v1/admin"
+    depends_on:
+      - request-api
+      - provider-bridge
+    networks:
+      - platform
+
+networks:
+  platform:
+    external: true
+    name: hdos_platform
