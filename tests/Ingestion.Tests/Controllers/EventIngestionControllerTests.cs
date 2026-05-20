@@ -129,11 +129,7 @@ public sealed class EventIngestionControllerTests
         Assert.Equal("BATCH_TOO_LARGE", err.Error);
     }
 
-    // ─── IN4: Rate limit — ASP.NET Core middleware, requires WebApplicationFactory ─
-
-    [Fact(Skip = "Rate limiting is ASP.NET Core middleware — requires WebApplicationFactory integration test.")]
-    public Task IN4_RateLimit_ExceedTenantQuota_Returns429_WithRetryAfter()
-        => Task.CompletedTask;
+    // ─── IN4: Rate limit — implemented as integration test in Integration/EventIngestionIntegrationTests.cs
 
     // ─── IN5: Schema validation — no schema registered → pass-through ────────
 
@@ -200,9 +196,5 @@ public sealed class EventIngestionControllerTests
             Arg.Any<CancellationToken>());
     }
 
-    // ─── IN9: Missing ingestion scope — JWT middleware, requires WebApplicationFactory ─
-
-    [Fact(Skip = "JWT scope enforcement is authorization middleware — requires WebApplicationFactory integration test.")]
-    public Task IN9_JwtScope_MissingIngestionScope_Returns403()
-        => Task.CompletedTask;
+    // ─── IN9: Missing ingestion scope — implemented as integration test in Integration/EventIngestionIntegrationTests.cs
 }

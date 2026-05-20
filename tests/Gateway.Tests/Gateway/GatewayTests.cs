@@ -32,29 +32,8 @@ public sealed class GatewayTests : IClassFixture<WebApplicationFactory<Reporting
         });
     }
 
-    // ─── GW1: /api/v1/requests/* → request-api backend ──────────────────────
-
-    [Fact(Skip = "Requires backend stub server — enable in Phase 12 integration suite.")]
-    public Task GW1_Route_Requests_ForwardedToRequestApi()
-        => Task.CompletedTask;
-
-    // ─── GW2: /api/v1/events/* → ingestion-api backend ──────────────────────
-
-    [Fact(Skip = "Requires backend stub server — enable in Phase 12 integration suite.")]
-    public Task GW2_Route_Events_ForwardedToIngestionApi()
-        => Task.CompletedTask;
-
-    // ─── GW3: /hubs/main WebSocket upgrade ───────────────────────────────────
-
-    [Fact(Skip = "Requires backend stub server — enable in Phase 12 integration suite.")]
-    public Task GW3_Route_Hub_WebSocketUpgrade_Proxied()
-        => Task.CompletedTask;
-
-    // ─── GW4: SSE response buffering disabled ────────────────────────────────
-
-    [Fact(Skip = "Requires backend stub server — enable in Phase 12 integration suite.")]
-    public Task GW4_Route_Sse_ResponseBufferingDisabled()
-        => Task.CompletedTask;
+    // ─── GW1–GW4: Backend-stub tests ─────────────────────────────────────────
+    // Implemented in Integration/GatewayIntegrationTests.cs (Phase 12)
 
     // ─── GW5: Invalid JWT → 401 (gateway rejects; backend never called) ──────
 
@@ -72,11 +51,7 @@ public sealed class GatewayTests : IClassFixture<WebApplicationFactory<Reporting
         Assert.Equal(System.Net.HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
-    // ─── GW6: Valid JWT → claim headers forwarded ────────────────────────────
-
-    [Fact(Skip = "Requires backend stub server to assert forwarded headers — enable in Phase 12.")]
-    public Task GW6_JWT_Valid_ClaimsForwarded_AsHeaders()
-        => Task.CompletedTask;
+    // ─── GW6: Backend-stub test — see Integration/GatewayIntegrationTests.cs
 
     // ─── GW7: CORS preflight — allowed origin → 200 with CORS headers ────────
 
@@ -128,11 +103,7 @@ public sealed class GatewayTests : IClassFixture<WebApplicationFactory<Reporting
             "CORS Allow-Origin header must not be present for disallowed origin");
     }
 
-    // ─── GW9: Global IP rate limit → 429 ─────────────────────────────────────
-
-    [Fact(Skip = "Rate-limit policy requires high request count — enable in Phase 12 load test suite.")]
-    public Task GW9_RateLimit_GlobalIpFlood_Returns429()
-        => Task.CompletedTask;
+    // ─── GW9: Rate-limit flood test — see Integration/GatewayIntegrationTests.cs
 
     // ─── GW10: /health → 200 without authentication ──────────────────────────
 

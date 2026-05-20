@@ -1,7 +1,31 @@
 # DECISIONS.md — Architecture & Design Decisions
-> Created: 2026-05-18 | Updated after Phase 5 (2026-05-19)
+> Created: 2026-05-18 | Last updated: 2026-05-20 (Phase 12)
 
 This file records non-obvious decisions made during platform design. Each entry explains the chosen behaviour, why alternatives were rejected, and what it implies for implementation. Frontend and provider teams should read entries that affect their integration surface.
+
+---
+
+## Table of Contents
+
+1. [Multi-tab user-level fan-out](#multi-tab-user-level-fan-out)
+2. [Filter change race / request supersession](#filter-change-race--request-supersession)
+3. [OQ-P10-A — AdapterRequest.ParentRequestId placement](#oq-p10-a--adapterrequestparentrequestid-placement)
+4. [OQ-P10-B — ProviderId hint in envelope](#oq-p10-b--providerid-hint-in-envelope)
+5. [OQ-P10-C — Nested timeout vs cache TTL independence](#oq-p10-c--nested-timeout-vs-cache-ttl-independence)
+6. [OQ-P10-D — ExternalProviderConfig validation at Resolve() vs FetchAsync()](#oq-p10-d--externalproviderconfig-validation-at-resolve-vs-fetchasync)
+7. [Dashboard version field semantics](#dashboard-version-field-semantics)
+8. [Coding standards (locked for Phase 2 onward)](#coding-standards-locked-for-phase-2-onward)
+9. [Markdown rendering policy](#markdown-rendering-policy)
+10. [Integration tests — deferred execution](#integration-tests--deferred-execution)
+11. [Phase 2 work items (surfaced during Phase 1.5 review)](#phase-2-work-items-surfaced-during-phase-15-review)
+12. [Handler unit-test coverage policy (Phase 5)](#handler-unit-test-coverage-policy-phase-5)
+13. [Worker architecture decision](#worker-architecture-decision)
+14. [DLQ inspection (Phase 6 producer, Phase 11 consumer)](#dlq-inspection-phase-6-producer-phase-11-consumer)
+15. [Object storage — deferred to Phase 11](#object-storage--deferred-to-phase-11)
+16. [Phase 7 — Gateway design decisions](#phase-7--gateway-design-decisions)
+17. [Phase 8 — Provider Bridge design decisions](#phase-8--provider-bridge-design-decisions)
+18. [Phase 11 — Event Ingestion & YARP Gateway decisions](#phase-11--event-ingestion--yarp-gateway-decisions)
+19. [Phase 12 — CVE transitive dependency overrides](#phase-12--cve-transitive-dependency-overrides-2026-05-20)
 
 ---
 
@@ -539,3 +563,22 @@ Compiled `JsonSchema` objects from `JsonSchema.Net` are cached in `IMemoryCache`
 ### Late progress event acceptance (Patch 5)
 
 Progress events may arrive on the SSE stream after the terminal event. This is an accepted race condition inherent to distributed pub/sub. Clients MUST ignore progress events received after the terminal event for a given `requestId`. Documented in PROVIDER_PROTOCOL.md §18.2.
+
+---
+
+## Phase 12 — CVE transitive dependency overrides (2026-05-20)
+
+Two transitive packages carried known high-severity CVEs across the entire .NET 9.x branch. Both were pinned to 10.0.8 in `Directory.Build.props` as global transitive overrides.
+
+| Package | Vulnerable versions | Fixed version | CVE |
+|---|---|---|---|
+| `System.IO.Packaging` | all 9.x | 10.0.8 | GHSA (high severity) |
+| `System.Security.Cryptography.Xml` | all 9.x | 10.0.8 | GHSA (high severity) |
+
+**Verification method**: `dotnet list package --vulnerable --include-transitive` returned zero high-severity findings after applying `10.0.8` pins. The `9.0.5` versions were tried first and still flagged as vulnerable by NuGet audit — confirming the entire 9.x branch is affected.
+
+**Why 10.0.8 specifically**: First version in the 10.x branch that carries the CVE fix. Verified via `dotnet package search` on 2026-05-20.
+
+**Scope**: `Directory.Build.props` at repo root applies `PrivateAssets="All"` so the override packages are not leaked as transitive dependencies to downstream consumers.
+
+**Alternative considered (rejected)**: Suppressing the `NU1903` warning via `NuGetAuditSuppress`. Rejected because it masks the vulnerability rather than fixing it; the 10.0.8 packages are drop-in compatible (no API surface changes relevant to this codebase).

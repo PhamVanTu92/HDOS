@@ -166,4 +166,7 @@ app.MapHealthChecks("/healthz/ready", new HealthCheckOptions
 
 app.Run();
 
-public partial class Program { }
+namespace ReportingPlatform.IngestionApi
+{
+    public partial class Program { }
+}
