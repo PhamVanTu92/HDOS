@@ -74,7 +74,10 @@ public sealed class FilterTransformerTests
     public async Task FilterDateRangeTransformer_MatchesGoldenFile()
     {
         var vc  = """{"filterKey":"date","label":"Date Range"}""";
-        var t   = new FilterDateRangeTransformer();
+        // Fixed clock: 2026-01-15 UTC — golden file uses static dates 2026-01-08 / 2026-01-15
+        // so the test never drifts with the calendar.
+        var clock = new FrozenTimeProvider(new DateTimeOffset(2026, 1, 15, 0, 0, 0, TimeSpan.Zero));
+        var t   = new FilterDateRangeTransformer(clock);
         var ctx = TransformerTestHelpers.Ctx("filter_date_range", vc);
 
         var result = await t.TransformAsync([], null, ctx);

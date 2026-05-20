@@ -2,8 +2,8 @@
   "filterKey": "date",
   "label": "Date Range",
   "currentValue": {
-    "from": "2026-05-13",
-    "to": "2026-05-20"
+    "from": "2026-01-08",
+    "to": "2026-01-15"
   },
   "presets": [
     {

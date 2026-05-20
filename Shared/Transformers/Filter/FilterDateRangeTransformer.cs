@@ -16,6 +16,15 @@ internal sealed class FilterDateRangeTransformer : IWidgetTransformer
         new DatePreset { Label = "This year",    Value = "this_year"    },
     ];
 
+    private readonly TimeProvider _clock;
+
+    /// <param name="clock">
+    /// Clock used to compute default date range. Defaults to <see cref="TimeProvider.System"/>.
+    /// Pass a fixed <see cref="TimeProvider"/> in tests to prevent golden-file drift.
+    /// </param>
+    public FilterDateRangeTransformer(TimeProvider? clock = null)
+        => _clock = clock ?? TimeProvider.System;
+
     public string ChartType => "filter_date_range";
 
     public Task<JsonElement> TransformAsync(
@@ -24,11 +33,12 @@ internal sealed class FilterDateRangeTransformer : IWidgetTransformer
         WidgetRenderContext ctx,
         CancellationToken ct = default)
     {
+        var now       = _clock.GetUtcNow().DateTime;
         var vc        = ctx.VisualConfig();
         var filterKey = vc.TryGetString("filterKey") ?? ctx.Widget.WidgetId;
         var label     = vc.TryGetString("label")     ?? ctx.Widget.Title;
-        var defaultFrom = vc.TryGetString("defaultFrom") ?? DateTime.UtcNow.AddDays(-7).ToString("yyyy-MM-dd");
-        var defaultTo   = vc.TryGetString("defaultTo")   ?? DateTime.UtcNow.ToString("yyyy-MM-dd");
+        var defaultFrom = vc.TryGetString("defaultFrom") ?? now.AddDays(-7).ToString("yyyy-MM-dd");
+        var defaultTo   = vc.TryGetString("defaultTo")   ?? now.ToString("yyyy-MM-dd");
 
         // Current filter value from active filters
         var fromKey = $"{filterKey}_from";
