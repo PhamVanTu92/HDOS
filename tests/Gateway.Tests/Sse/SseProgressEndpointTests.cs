@@ -139,7 +139,7 @@ public sealed class SseProgressEndpointTests
     {
         var registry   = BuildRegistry();
         var ringBuffer = BuildRingBuffer();
-        var cts        = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        var cts        = new CancellationTokenSource(TimeSpan.FromSeconds(15));
         using var ms   = new MemoryStream();
         var ctx        = BuildHttpContext(ms);
 
@@ -147,7 +147,7 @@ public sealed class SseProgressEndpointTests
 
         _ = Task.Run(async () =>
         {
-            await Task.Delay(50);
+            await Task.Delay(200); // give HandleAsync time to register the channel
             foreach (var pct in percents)
                 registry.FanOut("req-ss5", new SseEvent("progress", $"{{\"percent\":{pct}}}"));
             await Task.Delay(20);

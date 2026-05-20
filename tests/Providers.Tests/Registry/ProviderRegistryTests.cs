@@ -29,7 +29,7 @@ public sealed class ProviderRegistryTests : IAsyncLifetime
 
     // T7: Integration test — requires Docker (Redis via Testcontainers).
     // Execution deferred to Phase 12 per DECISIONS.md §"Phase 3 integration tests".
-    [Fact]
+    [Fact(Skip = "Requires Docker (PostgreSQL + Redis via Testcontainers). Run manually when Docker is available.")]
     [Trait("Category", "Integration")]
     [Trait("RequiresDocker", "true")]
     public async Task T7_RedisPubSubTriggersReload()
