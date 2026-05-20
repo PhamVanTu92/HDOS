@@ -35,7 +35,7 @@ internal sealed class ExternalProviderAdapter : IDatasourceAdapter
     {
         var config = ParseConfig(request.Datasource.ConnectionConfig);
 
-        // ── Patch 2: effective timeout = min(config, parent remaining) ────
+        // Patch 2: effective timeout = min(config, parent remaining).
         var configTimeout = TimeSpan.FromMilliseconds(Math.Min(config.TimeoutMs, 30_000));
         var effectiveTimeout = configTimeout;
 
@@ -50,10 +50,28 @@ internal sealed class ExternalProviderAdapter : IDatasourceAdapter
 
         var nestedId = Guid.NewGuid().ToString("N");
         var tcs      = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var channel  = RedisChannel.Literal(RedisKeys.SseTerminal(nestedId));
+        var terminal = RedisChannel.Literal(RedisKeys.SseTerminal(nestedId));
 
         // ── Subscribe BEFORE submit to avoid notification race ────────────
-        await _subscriber.SubscribeAsync(channel, (_, _) => tcs.TrySetResult(true));
+        await _subscriber.SubscribeAsync(terminal, (_, _) => tcs.TrySetResult(true));
+
+        // EP12: progress forwarding — subscribe BEFORE submit (same race avoidance pattern).
+        ISubscriber? progressForwarder = null;
+        if (request.ParentWantsProgress && request.ParentRequestId is not null)
+        {
+            var progressIn  = RedisChannel.Literal(RedisKeys.SseNotify(nestedId));
+            var progressOut = RedisChannel.Literal(RedisKeys.SseNotify(request.ParentRequestId));
+            progressForwarder = _subscriber;
+            await _subscriber.SubscribeAsync(progressIn,
+                async (_, value) =>
+                {
+                    try { await progressForwarder.PublishAsync(progressOut, value); }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to forward progress to parent {ParentId}", request.ParentRequestId);
+                    }
+                });
+        }
 
         try
         {
@@ -86,10 +104,13 @@ internal sealed class ExternalProviderAdapter : IDatasourceAdapter
         finally
         {
             // Best-effort unsubscribe — don't throw over a cleanup failure.
-            try { await _subscriber.UnsubscribeAsync(channel); }
-            catch (Exception ex)
+            try { await _subscriber.UnsubscribeAsync(terminal); }
+            catch (Exception ex) { _logger.LogWarning(ex, "Failed to unsubscribe from terminal channel {Channel}", terminal); }
+
+            if (request.ParentWantsProgress && request.ParentRequestId is not null)
             {
-                _logger.LogWarning(ex, "Failed to unsubscribe from {Channel}", channel);
+                try { await _subscriber.UnsubscribeAsync(RedisChannel.Literal(RedisKeys.SseNotify(nestedId))); }
+                catch (Exception ex) { _logger.LogWarning(ex, "Failed to unsubscribe from progress channel for {NestedId}", nestedId); }
             }
         }
 
@@ -133,6 +154,7 @@ internal sealed class ExternalProviderAdapter : IDatasourceAdapter
             CorrelationId = request.ParentRequestId,       // parent requestId for correlation
             Operation     = config.OperationName,
             Params        = paramsEl,
+            ProviderId    = config.ProviderId,             // EP13: routing hint
             Options = new RequestOptions
             {
                 TimeoutMs = (int)effectiveTimeout.TotalMilliseconds,
@@ -264,5 +286,4 @@ internal sealed class ExternalProviderAdapter : IDatasourceAdapter
             };
         }
     }
-
 }

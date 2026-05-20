@@ -22,4 +22,10 @@ public sealed record AdapterRequest
 
     /// <summary>Absolute deadline of the parent operation. Nested timeout = min(config.TimeoutMs, remaining).</summary>
     public DateTimeOffset? ParentDeadline { get; init; }
+
+    /// <summary>
+    /// If true and ParentRequestId is set, nested provider progress events are
+    /// forwarded to the parent SSE stream via rp:sse-notify pub/sub.
+    /// </summary>
+    public bool ParentWantsProgress { get; init; }
 }

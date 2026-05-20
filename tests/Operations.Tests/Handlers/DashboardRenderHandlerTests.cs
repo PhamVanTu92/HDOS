@@ -25,7 +25,8 @@ public sealed class DashboardRenderHandlerTests
             CancellationToken ct = default,
             string? callerRequestId = null,
             string? callerUserId = null,
-            DateTimeOffset? callerDeadline = null) =>
+            DateTimeOffset? callerDeadline = null,
+            bool callerWantsProgress = false) =>
             Task.FromResult(_payload);
     }
 

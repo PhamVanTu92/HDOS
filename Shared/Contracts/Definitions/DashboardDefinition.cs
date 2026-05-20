@@ -20,6 +20,14 @@ public sealed record WidgetDefinition
     public IReadOnlyList<string>? AllowedChartTypes { get; init; }
     public JsonElement? VisualConfig { get; init; }
     public JsonElement? InteractionConfig { get; init; }
+
+    /// <summary>
+    /// Event types that trigger a WidgetStale notification for this widget.
+    /// When any listed event arrives for this tenant, the widget is invalidated.
+    /// Null or empty = no event-driven invalidation.
+    /// Exact string match only (Phase 11); wildcard patterns deferred to Phase 12.
+    /// </summary>
+    public IReadOnlyList<string>? SubscribesTo { get; init; }
 }
 
 public sealed record RefreshPolicyDefinition

@@ -1,0 +1,308 @@
+# ReportingPlatform — full-stack compose
+# Usage: docker compose up -d
+# Providers overlay: docker compose -f docker-compose.yml -f docker-compose.providers.yml up -d
+#
+# Port map (host → container):
+#   5500 → gateway          (public entry point)
+#   5000 → request-api      (internal, reachable via gateway only)
+#   5100 → ingestion-api    (internal, reachable via gateway only)
+#   5200 → realtime-hub     (internal, reachable via gateway only)
+#   5400 → provider-bridge  (gRPC — internal)
+#   5432 → postgres
+#   6379 → redis
+#   5672 → rabbitmq (AMQP)
+#  15672 → rabbitmq (management UI)
+
+services:
+
+  # ─── Infrastructure ──────────────────────────────────────────────────────────
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB:       hdos
+      POSTGRES_USER:     hdos
+      POSTGRES_PASSWORD: hdos
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/Migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hdos -d hdos"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - platform
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - platform
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+    networks:
+      - platform
+
+  # ─── Phase 11: Gateway (public ingress) ──────────────────────────────────────
+
+  gateway:
+    build:
+      context: .
+      dockerfile: Services/Gateway/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS:        http://+:5500
+      Auth__Authority:        "${AUTH_AUTHORITY:-}"
+      Auth__Audience:         "${AUTH_AUDIENCE:-reporting-platform}"
+      Cors__AllowedOrigins__0: "${CORS_ORIGIN_0:-http://localhost:3000}"
+      Cors__AllowedOrigins__1: "${CORS_ORIGIN_1:-http://localhost:5173}"
+    ports:
+      - "5500:5500"
+    depends_on:
+      request-api:
+        condition: service_healthy
+      ingestion-api:
+        condition: service_started
+      realtime-hub:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:5500/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    networks:
+      - platform
+
+  # ─── Core: Request API ───────────────────────────────────────────────────────
+
+  request-api:
+    build:
+      context: .
+      dockerfile: Services/Request.Api/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT:   Development
+      ASPNETCORE_URLS:          http://+:5000
+      Redis__ConnectionString:  redis:6379
+      RabbitMQ__Uri:            amqp://guest:guest@rabbitmq/
+      Auth__Authority:          "${AUTH_AUTHORITY:-}"
+      Auth__Audience:           "${AUTH_AUDIENCE:-reporting-platform}"
+      ConnectionStrings__Postgres: "Host=postgres;Database=hdos;Username=hdos;Password=hdos"
+    ports:
+      - "5000:5000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:5000/healthz/live || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    networks:
+      - platform
+
+  # ─── Phase 11: Ingestion API ─────────────────────────────────────────────────
+
+  ingestion-api:
+    build:
+      context: .
+      dockerfile: Services/Ingestion.Api/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT:   Development
+      ASPNETCORE_URLS:          http://+:5100
+      Redis__ConnectionString:  redis:6379
+      RabbitMQ__Uri:            amqp://guest:guest@rabbitmq/
+      Auth__Authority:          "${AUTH_AUTHORITY:-}"
+      Auth__Audience:           "${AUTH_AUDIENCE:-reporting-platform}"
+      ConnectionStrings__Postgres: "Host=postgres;Database=hdos;Username=hdos;Password=hdos"
+    ports:
+      - "5100:5100"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:5100/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    networks:
+      - platform
+
+  # ─── Core: Realtime Hub (SignalR) ─────────────────────────────────────────────
+
+  realtime-hub:
+    build:
+      context: .
+      dockerfile: Services/Realtime.Hub/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT:   Development
+      ASPNETCORE_URLS:          http://+:5200
+      Redis__ConnectionString:  redis:6379
+      RabbitMQ__Uri:            amqp://guest:guest@rabbitmq/
+      Auth__Authority:          "${AUTH_AUTHORITY:-}"
+      Auth__Audience:           "${AUTH_AUDIENCE:-reporting-platform}"
+    ports:
+      - "5200:5200"
+    depends_on:
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:5200/healthz/live || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    networks:
+      - platform
+
+  # ─── Core: Provider Bridge (gRPC) ────────────────────────────────────────────
+
+  provider-bridge:
+    build:
+      context: .
+      dockerfile: Services/Provider.Bridge/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      Bridge__JwksUrl:        http://request-api:5000/.well-known/jwks.json
+      Bridge__GrpcUrl:        http://provider-bridge:5400
+    ports:
+      - "5400:5400"
+    depends_on:
+      request-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:5400/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    networks:
+      - platform
+
+  # ─── Core: Operation Router Worker ───────────────────────────────────────────
+
+  operation-router-worker:
+    build:
+      context: .
+      dockerfile: Services/Operation.Router.Worker/Dockerfile
+    environment:
+      DOTNET_ENVIRONMENT: Development
+      ConnectionStrings__RabbitMQ: amqp://guest:guest@rabbitmq/
+      ConnectionStrings__Postgres: "Host=postgres;Database=hdos;Username=hdos;Password=hdos"
+      ConnectionStrings__Redis:    redis:6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - platform
+
+  # ─── Core: Response Dispatcher Worker ────────────────────────────────────────
+
+  response-dispatcher-worker:
+    build:
+      context: .
+      dockerfile: Services/Response.Dispatcher.Worker/Dockerfile
+    environment:
+      DOTNET_ENVIRONMENT:          Development
+      Redis__ConnectionString:     redis:6379
+      RabbitMQ__Uri:               amqp://guest:guest@rabbitmq/
+      ConnectionStrings__Postgres: "Host=postgres;Database=hdos;Username=hdos;Password=hdos"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - platform
+
+  # ─── Core: Progress Dispatcher Worker ────────────────────────────────────────
+
+  progress-dispatcher-worker:
+    build:
+      context: .
+      dockerfile: Services/Progress.Dispatcher.Worker/Dockerfile
+    environment:
+      DOTNET_ENVIRONMENT:       Development
+      Redis__ConnectionString:  redis:6379
+      RabbitMQ__Uri:            amqp://guest:guest@rabbitmq/
+    depends_on:
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - platform
+
+  # ─── Phase 11: Event Processor Worker ────────────────────────────────────────
+
+  event-processor-worker:
+    build:
+      context: .
+      dockerfile: Services/Event.Processor.Worker/Dockerfile
+    environment:
+      DOTNET_ENVIRONMENT:          Development
+      Redis__ConnectionString:     redis:6379
+      RabbitMQ__Uri:               amqp://guest:guest@rabbitmq/
+      ConnectionStrings__Postgres: "Host=postgres;Database=hdos;Username=hdos;Password=hdos"
+      Hub__Url:                    http://realtime-hub:5200
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      realtime-hub:
+        condition: service_started
+    networks:
+      - platform
+
+# ─── Volumes & Networks ───────────────────────────────────────────────────────
+
+volumes:
+  postgres_data:
+  redis_data:
+  rabbitmq_data:
+
+networks:
+  platform:
+    name: hdos_platform

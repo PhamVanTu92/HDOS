@@ -469,3 +469,46 @@ Stored in Postgres `datasources.connection_config` JSONB:
 ```
 
 The `paramMapping` maps widget filter values into provider params using `{{filters.key}}` tokens. Unknown filter keys resolve to JSON `null`. Literal string values (no `{{}}`) are passed through as-is.
+
+---
+
+## 18. SSE Progress Event Ordering — Late Arrival Contract
+
+### 18.1 Terminal event is the authoritative end-of-stream signal
+
+When the platform dispatches a `Terminal` gRPC message (`status: DONE`, `FAILED`, or `CANCELLED`) for a request, it publishes a terminal SSE event on the `rp:sse-terminal:{requestId}` channel. The frontend receives this as a `done`, `failed`, or `cancelled` event on the SSE stream.
+
+### 18.2 Late progress events are acceptable
+
+> **Clients SHOULD ignore progress events received after the terminal event for a given `requestId`.**
+
+Due to the distributed pub/sub architecture, progress events emitted close to the terminal event may arrive on the SSE stream *after* the terminal event has been dispatched. This is an inherent property of asynchronous message passing and is not an error.
+
+**When this happens**:
+- Progress events are buffered in a Redis Stream ring buffer (up to 100 events, 30-second TTL).
+- The SSE endpoint delivers buffered events in order, but the terminal event may arrive first if it was published on a higher-priority channel.
+- For nested provider calls (dashboard widget renders), progress forwarding is best-effort — a forwarded progress event may arrive after the parent terminal.
+
+**Client responsibility**:
+1. On receiving a terminal event (`done`, `failed`, `cancelled`): mark the `requestId` as complete.
+2. If a subsequent progress event arrives for a `requestId` already marked complete: silently discard it.
+3. Do NOT retry or re-open the SSE stream based on a late progress event.
+
+**Provider responsibility**: none — this is an infrastructure concern, not a provider concern. Providers emit progress via `OperationProgress` gRPC stream messages and emit the final `Terminal` message when computation is complete. The platform handles ordering best-effort.
+
+### 18.3 Progress event format
+
+Progress events arrive as SSE `data:` lines with JSON:
+```json
+{
+  "requestId": "abc123",
+  "percent": 75,
+  "message": "Processing rows 750/1000..."
+}
+```
+
+Terminal events:
+```
+event: done
+data: {"requestId":"abc123","status":"completed"}
+```

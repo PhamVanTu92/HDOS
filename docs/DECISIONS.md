@@ -454,3 +454,88 @@ WHERE pending_secret_expires_at IS NOT NULL
   AND pending_secret_expires_at < NOW() - INTERVAL '5 minutes';
 ```
 The extra 5-minute buffer beyond `pending_secret_expires_at` ensures no race with an active verification that loaded the row just before the scheduled update ran.
+
+---
+
+## Phase 11 — Event Ingestion & YARP Gateway decisions
+
+### OQ-P11-A — event_subscriptions sync on dashboard upsert only
+
+**Decision**: Sync on dashboard upsert only (not datasource upsert). Subscriptions are widget-level (`WidgetDefinition.SubscribesTo`); widgets live in dashboards, not datasources. Datasource changes do not affect which events target which widgets.
+
+### OQ-P11-B — SubscribesTo exact match only (v1)
+
+**Decision**: `WidgetDefinition.SubscribesTo` uses exact string matching in Phase 11. Wildcard patterns (e.g. `"order.*"` matching `"order.shipped"`) require pattern-matching in the `event_subscriptions` lookup — deferred to Phase 12.
+
+**Implication**: widget definitions must list exact event types. `"order.shipped"` and `"order.cancelled"` must each appear as a separate entry.
+
+### OQ-P11-C — Same JWKS for all token types
+
+**Decision**: Ingestion tokens use the same JWKS endpoint as user auth tokens (same IdP). Token type is distinguished by the `scope` claim: `scope: "ingestion"` for ingestion tokens, `scope: "user"` for user auth tokens. `Ingestion.Api` checks scope; user-facing routes check different scopes. No separate JWKS needed.
+
+### OQ-P11-D — Gateway dev port 5500
+
+**Decision**: YARP Gateway dev port = `5500`. Provider Bridge (`5400`) and Gateway are separate services — no port conflict risk in production (different containers), but dev port collision avoided by choosing `5500`. Update `docker-compose.yml` and local dev appsettings accordingly.
+
+### OQ-P11-E — Progress re-published verbatim
+
+**Decision**: Progress events forwarded from nested provider to parent SSE stream are re-published verbatim — no enrichment or modification of the `RedisValue` payload. `Request.Api`'s `ProgressPubSubSubscriber` already fans out by channel; no enrichment needed.
+
+### OQ-P11-F — L0 cache invalidation: Option A selected
+
+**Decision**: Option A — proactive L1 Redis DEL + L0 auto-expiry.
+
+Worker publishes `rp:cache-invalidate:widget:{tenantId}:{dashCode}:{widgetId}` to Redis pub/sub. `Request.Api` subscribes on startup; on message receipt, calls `WidgetCacheService.EvictWidgetFromL1Async` (Redis SCAN pattern `widget:{tenantId}:{dashCode}:v*:{widgetId}:*` + DEL).
+
+**L0 staleness window**: Up to 30 seconds. `IMemoryCache` does not support prefix eviction; L0 entries expire via promoted-entry TTL. Accepted: WidgetStale guarantees eventual consistency, not instantaneous L0 coherence.
+
+**Implementation cost**: ~30 lines across 2 files. Confirmed < 1 day.
+
+---
+
+### X-Tenant-Id Trust Boundary Invariant (Patch 3)
+
+**ID**: OQ-P11-X-TenantId-Trust
+
+**Invariant**: Backend services MUST extract tenant identity from the **JWT**, never from `X-Tenant-Id` / `X-User-Id` headers for authorization decisions. The Gateway-forwarded headers are **informational only**.
+
+```csharp
+// ✅ CORRECT — identity from JWT (cryptographically signed)
+var tenantId = User.FindFirstValue("tenant_id")
+    ?? throw new UnauthorizedAccessException("tenant_id claim missing");
+
+// ❌ WRONG — header is informational; could be spoofed if direct access bypasses gateway
+var tenantId = Request.Headers["X-Tenant-Id"];
+```
+
+**Code-review enforcement**: Any PR where `tenant_id` (or equivalent authorization identity) is read from `Request.Headers["X-Tenant-Id"]` in an authorization path is a **blocking review comment**. Only `User.FindFirstValue("tenant_id")` / `JWT.GetTenantId()` is acceptable.
+
+**Why**: Defense-in-depth. Even though backends are not directly reachable (network policy), authorization decisions must be based on cryptographically signed artifacts. This also ensures correctness if a backend is temporarily directly exposed (debugging, misconfiguration).
+
+**Applied to**: `Ingestion.Api.EventIngestionController` (tenantId from `User.FindFirstValue("tenant_id")`), `Gateway.Program` (rate limiting from JWT claim, not header). All future backend services must follow this invariant.
+
+---
+
+### event_subscriptions FK CASCADE (Patch 4)
+
+The `event_subscriptions` table references `dashboard_definitions (tenant_id, dashboard_code)` via a foreign key with `ON DELETE CASCADE`. `dashboard_definitions` has a UNIQUE constraint on `(tenant_id, dashboard_code)` — PostgreSQL allows FK to reference UNIQUE constraints (not only PKs).
+
+**Effect**: When `DELETE FROM dashboard_definitions WHERE tenant_id = @t AND dashboard_code = @c` is executed (by `MetadataDashboardDeleteHandler`), all `event_subscriptions` rows for that dashboard are automatically removed. No application-level cleanup code needed.
+
+**Why not application-level cleanup**: FK CASCADE is atomic (same transaction), simpler, and eliminates a class of orphan-subscription bugs. The alternative (application-level DELETE before dashboard DELETE) requires explicit coordination and is prone to race conditions.
+
+---
+
+### Schema validation caching strategy (Patch 1)
+
+Compiled `JsonSchema` objects from `JsonSchema.Net` are cached in `IMemoryCache` with a 10-minute sliding TTL. Cache key: `"schema:{tenantId}:{eventType}"`.
+
+**Performance**: Per-event validation cost ~1ms. Batch of 1000 events = 1–2s without caching. With caching: ~1ms for the first event per `(tenant, eventType)` pair, near-zero for subsequent events within the TTL window.
+
+**Parallel batch validation**: Deferred to Phase 12. Profile-first approach — measure production batch sizes and latency before adding concurrency complexity.
+
+---
+
+### Late progress event acceptance (Patch 5)
+
+Progress events may arrive on the SSE stream after the terminal event. This is an accepted race condition inherent to distributed pub/sub. Clients MUST ignore progress events received after the terminal event for a given `requestId`. Documented in PROVIDER_PROTOCOL.md §18.2.

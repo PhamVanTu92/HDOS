@@ -152,6 +152,7 @@ public sealed class RequestSubmissionService : INestedRequestSubmitter
             CacheSeconds    = envelope.Options.CacheSeconds,
             Traceparent     = traceparent,
             ParentRequestId = null,
+            ProviderId      = envelope.ProviderId,   // EP13: routing hint forwarded to Bridge
         };
 
         // Step 8: Publish to priority queue (internal) or provider queue (external).

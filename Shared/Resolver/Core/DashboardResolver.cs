@@ -50,7 +50,8 @@ public sealed class DashboardResolver : IDashboardResolver
         CancellationToken ct = default,
         string? callerRequestId = null,
         string? callerUserId = null,
-        DateTimeOffset? callerDeadline = null)
+        DateTimeOffset? callerDeadline = null,
+        bool callerWantsProgress = false)
     {
         var sw = Stopwatch.StartNew();
 
@@ -77,7 +78,7 @@ public sealed class DashboardResolver : IDashboardResolver
             tenantId, dashboardCode, version, widget,
             datasources.TryGetValue(widget.DatasourceId, out var ds) ? ds : null,
             filters, tableParams, dropdownOptions, filtersHash,
-            callerRequestId, callerUserId, callerDeadline, ct));
+            callerRequestId, callerUserId, callerDeadline, callerWantsProgress, ct));
 
         var envelopes = await Task.WhenAll(tasks);
 
@@ -238,6 +239,7 @@ public sealed class DashboardResolver : IDashboardResolver
         string? callerRequestId,
         string? callerUserId,
         DateTimeOffset? callerDeadline,
+        bool callerWantsProgress,
         CancellationToken ct)
     {
         var startedAt = DateTimeOffset.UtcNow;
@@ -255,7 +257,7 @@ public sealed class DashboardResolver : IDashboardResolver
             return await RenderWidgetCoreAsync(
                 tenantId, dashCode, version, widget, datasource,
                 filters, tableParams, dropdownOptions,
-                callerRequestId, callerUserId, callerDeadline,
+                callerRequestId, callerUserId, callerDeadline, callerWantsProgress,
                 cacheKey, startedAt, sw, ct);
         }
         catch (Exception ex)
@@ -283,6 +285,7 @@ public sealed class DashboardResolver : IDashboardResolver
         string? callerRequestId,
         string? callerUserId,
         DateTimeOffset? callerDeadline,
+        bool callerWantsProgress,
         string cacheKey,
         DateTimeOffset startedAt,
         Stopwatch sw,
@@ -316,9 +319,10 @@ public sealed class DashboardResolver : IDashboardResolver
                 Datasource      = datasource,
                 Filters         = filters,
                 Pagination      = tableParams_,
-                ParentRequestId = callerRequestId,
-                UserId          = callerUserId,
-                ParentDeadline  = callerDeadline,
+                ParentRequestId     = callerRequestId,
+                UserId              = callerUserId,
+                ParentDeadline      = callerDeadline,
+                ParentWantsProgress = callerWantsProgress,
             };
 
             var adapter = _adapters.Resolve(datasource);

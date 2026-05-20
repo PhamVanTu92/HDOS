@@ -66,6 +66,7 @@ builder.Services.AddPlatformOperations();
 builder.Services.AddSingleton<SseConnectionRegistry>();
 builder.Services.AddSingleton<OrphanDetector>();
 builder.Services.AddHostedService<ProgressPubSubSubscriber>();
+builder.Services.AddHostedService<WidgetCacheInvalidationSubscriber>();
 
 // ── JWT authentication (user JWTs from external IdP) ─────────────────────
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)

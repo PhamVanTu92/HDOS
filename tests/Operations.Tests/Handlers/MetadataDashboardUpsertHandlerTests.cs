@@ -1,5 +1,7 @@
 using Microsoft.Extensions.Caching.Memory;
+using ReportingPlatform.Metadata.Abstractions;
 using ReportingPlatform.Metadata.Results;
+using ReportingPlatform.Metadata.Services;
 using ReportingPlatform.Operations.Handlers.Metadata;
 using ReportingPlatform.Resolver.Cache;
 using ReportingPlatform.Resolver.Invalidation;
@@ -8,6 +10,23 @@ namespace ReportingPlatform.Operations.Tests.Handlers;
 
 public sealed class MetadataDashboardUpsertHandlerTests
 {
+    // No-op event subscription repository for unit tests that don't exercise Phase 11 sync.
+    private sealed class NullEventSubscriptionRepository : IEventSubscriptionRepository
+    {
+        public Task<IReadOnlyList<EventSubscriptionRow>> GetSubscribersAsync(
+            string tenantId, string eventType, CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<EventSubscriptionRow>>([]);
+
+        public Task SyncAsync(
+            string tenantId, string dashboardCode,
+            IReadOnlyList<(string WidgetId, string EventType)> subscriptions,
+            CancellationToken ct = default)
+            => Task.CompletedTask;
+    }
+
+    private static EventSubscriptionSyncService NullSync() =>
+        new(new NullEventSubscriptionRepository(),
+            NullLogger<EventSubscriptionSyncService>.Instance);
     private static readonly JsonSerializerOptions DeserOpts =
         new() { PropertyNameCaseInsensitive = true };
     // ------------------------------------------------------------------
@@ -85,7 +104,8 @@ public sealed class MetadataDashboardUpsertHandlerTests
     public async Task Upsert_NewDashboard_ReturnsVersion1()
     {
         var repo    = new InMemoryDashboardRepo();
-        var handler = new MetadataDashboardUpsertHandler(repo);
+        var handler = new MetadataDashboardUpsertHandler(repo, NullSync(),
+            NullLogger<MetadataDashboardUpsertHandler>.Instance);
         var ctx     = MakeContext("t1", MakeDef("new_dash"));
 
         var result = await handler.HandleAsync(ctx);
@@ -102,7 +122,8 @@ public sealed class MetadataDashboardUpsertHandlerTests
     public async Task Upsert_ExistingDashboard_IncrementsVersion()
     {
         var repo    = new InMemoryDashboardRepo();
-        var handler = new MetadataDashboardUpsertHandler(repo);
+        var handler = new MetadataDashboardUpsertHandler(repo, NullSync(),
+            NullLogger<MetadataDashboardUpsertHandler>.Instance);
         var ctx     = MakeContext("t1", MakeDef("my_dash"));
 
         await handler.HandleAsync(ctx); // first upsert → v1
@@ -120,7 +141,8 @@ public sealed class MetadataDashboardUpsertHandlerTests
     public async Task Upsert_PublishesCacheInvalidation()
     {
         var repo    = new InMemoryDashboardRepo();
-        var handler = new MetadataDashboardUpsertHandler(repo);
+        var handler = new MetadataDashboardUpsertHandler(repo, NullSync(),
+            NullLogger<MetadataDashboardUpsertHandler>.Instance);
         var ctx     = MakeContext("t1", MakeDef("dash_x"));
 
         await handler.HandleAsync(ctx);

@@ -28,11 +28,12 @@ internal sealed class DashboardRenderHandler : IOperationHandler
 
         var payload = await _resolver.RenderAsync(
             context.TenantId, p.DashboardCode, filters, tableParams, ct,
-            callerRequestId: context.RequestId,
-            callerUserId:    context.UserId,
-            callerDeadline:  context.TimeoutAtUnixMs > 0
+            callerRequestId:     context.RequestId,
+            callerUserId:        context.UserId,
+            callerDeadline:      context.TimeoutAtUnixMs > 0
                 ? DateTimeOffset.FromUnixTimeMilliseconds(context.TimeoutAtUnixMs)
-                : null);
+                : null,
+            callerWantsProgress: context.Progress is not null);
 
         context.Progress?.Report(new ProgressUpdate(100, "Dashboard render complete."));
 

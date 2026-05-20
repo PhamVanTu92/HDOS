@@ -1,0 +1,10 @@
+global using System.Security.Claims;
+global using System.Text.Json;
+global using MassTransit;
+global using Microsoft.AspNetCore.Authorization;
+global using Microsoft.AspNetCore.Mvc;
+global using Microsoft.Extensions.Logging;
+global using ReportingPlatform.Contracts.Envelopes;
+global using ReportingPlatform.IngestionApi.Models;
+global using ReportingPlatform.IngestionApi.Services;
+global using ReportingPlatform.Metadata.Abstractions;

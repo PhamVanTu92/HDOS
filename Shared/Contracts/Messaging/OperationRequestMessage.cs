@@ -28,4 +28,8 @@ public sealed record OperationRequestMessage
     // Null for client-submitted requests. Set to the parent request's requestId
     // when the Resolver dispatches nested provider calls inside dashboard.render.
     public string? ParentRequestId { get; init; }
+
+    // Optional provider routing hint. When set, Bridge prefers routing to the named
+    // provider's queue. Falls back to round-robin if that provider has no active session.
+    public string? ProviderId { get; init; }
 }

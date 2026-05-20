@@ -6,30 +6,20 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
-    <AssemblyName>ReportingPlatform.Gateway.Tests</AssemblyName>
+    <AssemblyName>ReportingPlatform.Ingestion.Tests</AssemblyName>
   </PropertyGroup>
   <ItemGroup>
-    <!-- ASP.NET Core: HttpContext, IFeatureCollection, SignalR Hub types -->
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
   <ItemGroup>
-    <!-- Gateway-layer projects under test -->
-    <ProjectReference Include="..\..\Shared\HubContracts\HubContracts.csproj" />
-    <ProjectReference Include="..\..\Shared\Operations\Operations.csproj" />
-    <ProjectReference Include="..\..\Shared\Caching\Caching.csproj" />
     <ProjectReference Include="..\..\Shared\Contracts\Contracts.csproj" />
-    <!-- Response.Dispatcher.Worker: ResponseRouter, DispatcherOptions -->
-    <ProjectReference Include="..\..\Services\Response.Dispatcher.Worker\Response.Dispatcher.Worker.csproj" />
-    <!-- Request.Api: SseProgressEndpoint, SseConnectionRegistry, OrphanDetector -->
-    <ProjectReference Include="..\..\Services\Request.Api\Request.Api.csproj" />
-    <!-- YARP Gateway (Phase 11) -->
-    <ProjectReference Include="..\..\Services\Gateway\Gateway.csproj" />
-  </ItemGroup>
-  <ItemGroup>
-    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="9.0.4" />
+    <ProjectReference Include="..\..\Shared\Metadata\Metadata.csproj" />
+    <ProjectReference Include="..\..\Services\Ingestion.Api\Ingestion.Api.csproj" />
+    <ProjectReference Include="..\..\Services\Event.Processor.Worker\Event.Processor.Worker.csproj" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="9.0.4" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.4" />
     <PackageReference Include="NSubstitute" Version="5.3.0" />
     <PackageReference Include="xunit" Version="2.9.3" />

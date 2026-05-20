@@ -1,3 +1,4 @@
+using ReportingPlatform.Metadata.Services;
 using ReportingPlatform.Operations.Dispatcher;
 using ReportingPlatform.Operations.Handlers.Admin;
 using ReportingPlatform.Operations.Handlers.Dashboard;
@@ -31,6 +32,7 @@ public static class OperationsExtensions
 
         // Shared services
         services.AddSingleton<FilterOptionsService>();
+        services.AddSingleton<EventSubscriptionSyncService>();
 
         // Dashboard handlers
         services.AddSingleton<IOperationHandler, DashboardListHandler>();

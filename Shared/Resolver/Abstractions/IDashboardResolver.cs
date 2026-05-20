@@ -14,5 +14,6 @@ public interface IDashboardResolver
         CancellationToken ct = default,
         string? callerRequestId = null,
         string? callerUserId = null,
-        DateTimeOffset? callerDeadline = null);
+        DateTimeOffset? callerDeadline = null,
+        bool callerWantsProgress = false);
 }

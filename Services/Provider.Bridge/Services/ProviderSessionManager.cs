@@ -25,6 +25,21 @@ public sealed class ProviderSessionManager
         await Task.WhenAll(tasks);
     }
 
+    /// <summary>
+    /// Returns true if any active session belongs to <paramref name="providerId"/>.
+    /// Used by routing hint logic to decide whether to prefer a specific provider queue.
+    /// Falls back to round-robin if this returns false (no active session for that provider).
+    /// </summary>
+    public bool HasActiveSession(string providerId)
+    {
+        foreach (var (_, handle) in _sessions)
+        {
+            if (string.Equals(handle.ProviderId, providerId, StringComparison.Ordinal))
+                return true;
+        }
+        return false;
+    }
+
     public int TotalSessions => _sessions.Count;
 }
 

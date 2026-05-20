@@ -127,4 +127,43 @@ public sealed class WidgetCacheService
         // Callers should pass the full key when known. Prefix eviction is not supported.
         _l0.Remove(keyPrefix);
     }
+
+    /// <summary>
+    /// Evicts all L1 Redis cache entries for a specific widget (Option A — Patch 2).
+    /// Uses SCAN to find all keys matching <c>widget:{tenantId}:{dashCode}:v*:{widgetId}:*</c>
+    /// and DELetes them.
+    ///
+    /// L0 entries are not explicitly evicted — they expire within 30 seconds via their
+    /// promoted-entry TTL. This is the accepted staleness window for in-process cache.
+    /// </summary>
+    public async Task EvictWidgetFromL1Async(string tenantId, string dashCode, string widgetId)
+    {
+        if (_redis is null)
+            return;
+
+        var db     = _redis.GetDatabase();
+        var server = _redis.GetEndPoints().FirstOrDefault();
+        if (server is null)
+            return;
+
+        var srv     = _redis.GetServer(server);
+        var pattern = $"widget:{tenantId}:{dashCode}:v*:{widgetId}:*";
+
+        try
+        {
+            var keys = new List<RedisKey>();
+            await foreach (var key in srv.KeysAsync(pattern: pattern))
+                keys.Add(key);
+
+            if (keys.Count > 0)
+                await db.KeyDeleteAsync(keys.ToArray());
+        }
+        catch (Exception ex)
+        {
+            // Redis failures are non-fatal for cache eviction — data will be re-fetched.
+            _logger.LogWarning(ex,
+                "L1 widget cache eviction failed for {TenantId}/{DashCode}/{WidgetId}",
+                tenantId, dashCode, widgetId);
+        }
+    }
 }
