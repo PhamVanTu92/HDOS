@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.RateLimiting;
 using Npgsql;
 using ReportingPlatform.Auth;
 using ReportingPlatform.Caching;
+using ReportingPlatform.Metadata.Extensions;
 using ReportingPlatform.Operations.Extensions;
 using ReportingPlatform.Providers.Extensions;
 using ReportingPlatform.RequestApi.Controllers;
@@ -41,6 +42,10 @@ if (builder.Environment.IsProduction())
     var redisForDp = ConnectionMultiplexer.Connect(redisConn);
     dpBuilder.PersistKeysToStackExchangeRedis(redisForDp, "DataProtection-Keys");
 }
+
+// ── Metadata repositories (Dashboard, Datasource, Schema) ────────────────
+// Must be registered before AddPlatformOperations() — handlers depend on these.
+builder.Services.AddPlatformMetadata();
 
 // ── Provider registry (uses the NpgsqlDataSource already registered above) ─
 builder.Services.AddPlatformProvidersWithExistingDataSource();
