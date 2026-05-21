@@ -1,6 +1,26 @@
 namespace ReportingPlatform.ExcelProvider.Config;
 
 /// <summary>
+/// Configuration options for the Ingestion API notification endpoint.
+/// </summary>
+public sealed class IngestionOptions
+{
+    public const string Section = "Ingestion";
+
+    /// <summary>Base URL of the Ingestion API, e.g. http://ingestion-api:5100</summary>
+    public string BaseUrl { get; set; } = "http://localhost:5100";
+
+    /// <summary>Client ID for obtaining an ingestion-scoped token (future use).</summary>
+    public string ClientId { get; set; } = "";
+
+    /// <summary>Client secret for obtaining an ingestion-scoped token (future use).</summary>
+    public string ClientSecret { get; set; } = "";
+
+    /// <summary>Platform token endpoint reused to obtain a bearer token for Ingestion API calls.</summary>
+    public string TokenEndpoint { get; set; } = "http://localhost:5000/api/v1/providers/token";
+}
+
+/// <summary>
 /// Configuration options bound from the "Provider" section of appsettings.json.
 /// </summary>
 public sealed class ProviderOptions

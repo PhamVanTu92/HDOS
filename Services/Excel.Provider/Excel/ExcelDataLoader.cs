@@ -88,6 +88,9 @@ public sealed class ExcelDataLoader
     /// <summary>Forces a reload on the next call to <see cref="GetDataAsync"/>.</summary>
     public void Invalidate() => _cache = null;
 
+    /// <summary>Alias for <see cref="Invalidate"/> — used by management services after a write.</summary>
+    public void InvalidateCache() => _cache = null;
+
     // ─── Disk I/O ─────────────────────────────────────────────────────────────
 
     private Task<ExcelDataSet> LoadFromDiskAsync(CancellationToken ct)

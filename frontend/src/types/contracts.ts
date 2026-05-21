@@ -118,13 +118,39 @@ export interface RegionalPerformance {
   regions: RegionPerformanceRow[];
 }
 
+// ─── New report response shapes ───────────────────────────────────────────────
+
+export interface ChannelComparisonResponse {
+  online: { revenue: number; units: number; percentage: number };
+  store: { revenue: number; units: number; percentage: number };
+  trend: { labels: string[]; online: number[]; store: number[] };
+}
+
+export interface ProductDetailResponse {
+  productName: string;
+  totalRevenue: number;
+  totalUnits: number;
+  avgDailyRevenue: number;
+  byRegion: { name: string; revenue: number; units: number }[];
+  trend: { labels: string[]; revenue: number[]; units: number[] };
+}
+
+export interface TopPerformersResponse {
+  topProducts: { rank: number; name: string; revenue: number; growth: number }[];
+  topRegions: { rank: number; name: string; revenue: number; growth: number }[];
+  period: string;
+}
+
 // ─── Report type registry ─────────────────────────────────────────────────────
 
 export type ReportOperation =
   | 'report.dashboard.summary'
   | 'report.sales.trend'
   | 'report.inventory.status'
-  | 'report.regional.performance';
+  | 'report.regional.performance'
+  | 'report.channel.comparison'
+  | 'report.product.detail'
+  | 'report.top.performers';
 
 export interface ReportTypeDefinition {
   operation: ReportOperation;
@@ -135,22 +161,37 @@ export interface ReportTypeDefinition {
 export const REPORT_TYPES: ReportTypeDefinition[] = [
   {
     operation: 'report.dashboard.summary',
-    label: 'Dashboard Summary',
-    description: 'KPIs for today including revenue, units, and alerts',
+    label: 'Tổng quan Dashboard',
+    description: 'KPI ngày hôm nay: doanh thu, số lượng và cảnh báo',
   },
   {
     operation: 'report.sales.trend',
-    label: 'Sales Trend',
-    description: 'Sales trend over a date range grouped by day/week/month',
+    label: 'Xu hướng bán hàng',
+    description: 'Xu hướng bán hàng theo khoảng thời gian, nhóm theo ngày/tuần/tháng',
   },
   {
     operation: 'report.inventory.status',
-    label: 'Inventory Status',
-    description: 'Current inventory levels and stock status for all products',
+    label: 'Tình trạng tồn kho',
+    description: 'Mức tồn kho hiện tại và trạng thái tất cả sản phẩm',
   },
   {
     operation: 'report.regional.performance',
-    label: 'Regional Performance',
-    description: 'Revenue and achievement by region for a given period',
+    label: 'Hiệu suất theo khu vực',
+    description: 'Doanh thu và mức đạt theo khu vực cho kỳ đã chọn',
+  },
+  {
+    operation: 'report.channel.comparison',
+    label: 'So sánh kênh bán hàng',
+    description: 'Phân tích đóng góp và xu hướng của kênh Online vs Cửa hàng',
+  },
+  {
+    operation: 'report.product.detail',
+    label: 'Chi tiết sản phẩm',
+    description: 'Phân tích doanh thu và xu hướng chi tiết cho từng sản phẩm',
+  },
+  {
+    operation: 'report.top.performers',
+    label: 'Top hiệu suất',
+    description: 'Bảng xếp hạng top 5 sản phẩm và khu vực tốt nhất',
   },
 ];

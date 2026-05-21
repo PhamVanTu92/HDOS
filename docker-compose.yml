@@ -365,12 +365,17 @@ services:
     restart: unless-stopped
     environment:
       DOTNET_ENVIRONMENT:          Development
+      ASPNETCORE_URLS:             http://+:5600
       Provider__ClientId:          excel-provider
       Provider__ClientSecret:      "${EXCEL_PROVIDER_SECRET:-excel-secret-dev-2024}"
       Provider__TokenEndpoint:     http://request-api:5000/api/v1/providers/token
       Provider__BridgeGrpcUrl:     http://provider-bridge:5400
+      Ingestion__BaseUrl:          http://ingestion-api:5100
+      Ingestion__TokenEndpoint:    http://request-api:5000/api/v1/providers/token
       ConnectionStrings__Postgres: "Host=postgres;Database=hdos;Username=hdos;Password=hdos"
       Excel__DataPath:             /app/ExcelData
+    ports:
+      - "5600:5600"   # Data Management API — CRUD dữ liệu Excel
     volumes:
       - excel_data:/app/ExcelData
     depends_on:

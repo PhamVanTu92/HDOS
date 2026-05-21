@@ -30,6 +30,11 @@ COPY --from=build /app/publish .
 ENV Provider__TokenEndpoint="http://request-api:5000/api/v1/providers/token"
 ENV Provider__BridgeGrpcUrl="http://provider-bridge:5400"
 ENV Excel__DataPath="/app/ExcelData"
+ENV Ingestion__BaseUrl="http://ingestion-api:5100"
+ENV Ingestion__TokenEndpoint="http://request-api:5000/api/v1/providers/token"
+ENV ASPNETCORE_URLS="http://+:5600"
+
+EXPOSE 5600
 
 VOLUME ["/app/ExcelData"]
 

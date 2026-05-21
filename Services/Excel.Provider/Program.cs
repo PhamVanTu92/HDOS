@@ -1,67 +1,79 @@
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using ReportingPlatform.ExcelProvider.Config;
 using ReportingPlatform.ExcelProvider.Database;
 using ReportingPlatform.ExcelProvider.Excel;
 using ReportingPlatform.ExcelProvider.Grpc;
+using ReportingPlatform.ExcelProvider.Management;
 using ReportingPlatform.ExcelProvider.Operations;
+using ReportingPlatform.ExcelProvider.Services;
 
 // ── EPPlus non-commercial licence must be set before any EPPlus call ──────────
 OfficeOpenXml.ExcelPackage.LicenseContext = OfficeOpenXml.LicenseContext.NonCommercial;
 
-var host = Host.CreateDefaultBuilder(args)
-    .ConfigureLogging(logging =>
-    {
-        logging.ClearProviders();
-        logging.AddConsole(opts =>
-        {
-            opts.FormatterName = "simple";
-        });
-        logging.SetMinimumLevel(LogLevel.Information);
-    })
-    .ConfigureServices((ctx, services) =>
-    {
-        var config = ctx.Configuration;
+var builder = WebApplication.CreateBuilder(args);
 
-        // ── Options ────────────────────────────────────────────────────────────
-        services.Configure<ProviderOptions>(config.GetSection(ProviderOptions.SectionName));
-        services.Configure<ExcelOptions>(config.GetSection(ExcelOptions.SectionName));
+// ── Logging ───────────────────────────────────────────────────────────────────
+builder.Logging.ClearProviders();
+builder.Logging.AddConsole(opts => opts.FormatterName = "simple");
+builder.Logging.SetMinimumLevel(LogLevel.Information);
 
-        // ── HttpClient for token endpoint ──────────────────────────────────────
-        services.AddHttpClient<TokenService>(client =>
-        {
-            client.Timeout = TimeSpan.FromSeconds(30);
-        });
+var config = builder.Configuration;
 
-        // ── Excel ──────────────────────────────────────────────────────────────
-        services.AddSingleton<SampleDataGenerator>();
-        services.AddSingleton<ExcelDataLoader>();
+// ── Options ───────────────────────────────────────────────────────────────────
+builder.Services.Configure<ProviderOptions>(config.GetSection(ProviderOptions.SectionName));
+builder.Services.Configure<ExcelOptions>(config.GetSection(ExcelOptions.SectionName));
+builder.Services.Configure<IngestionOptions>(config.GetSection(IngestionOptions.Section));
 
-        // ── Operation handlers ─────────────────────────────────────────────────
-        services.AddSingleton<IOperationHandler, DashboardSummaryHandler>();
-        services.AddSingleton<IOperationHandler, SalesTrendHandler>();
-        services.AddSingleton<IOperationHandler, InventoryStatusHandler>();
-        services.AddSingleton<IOperationHandler, RegionalPerformanceHandler>();
+// ── HttpClients ───────────────────────────────────────────────────────────────
+builder.Services.AddHttpClient<TokenService>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(30);
+});
 
-        // ── Dispatcher ─────────────────────────────────────────────────────────
-        services.AddSingleton<OperationDispatcher>();
+// Named client used by NotificationService to post events to Ingestion API
+builder.Services.AddHttpClient("ingestion", client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(10);
+});
 
-        // ── gRPC client (BackgroundService) ────────────────────────────────────
-        services.AddSingleton<ProviderBridgeClient>();
-        services.AddHostedService(sp => sp.GetRequiredService<ProviderBridgeClient>());
-    })
-    .Build();
+// ── Excel ─────────────────────────────────────────────────────────────────────
+builder.Services.AddSingleton<SampleDataGenerator>();
+builder.Services.AddSingleton<ExcelDataLoader>();
+
+// ── Operation handlers ────────────────────────────────────────────────────────
+builder.Services.AddSingleton<IOperationHandler, DashboardSummaryHandler>();
+builder.Services.AddSingleton<IOperationHandler, SalesTrendHandler>();
+builder.Services.AddSingleton<IOperationHandler, InventoryStatusHandler>();
+builder.Services.AddSingleton<IOperationHandler, RegionalPerformanceHandler>();
+builder.Services.AddSingleton<IOperationHandler, ChannelComparisonHandler>();
+builder.Services.AddSingleton<IOperationHandler, ProductDetailHandler>();
+builder.Services.AddSingleton<IOperationHandler, TopPerformersHandler>();
+
+// ── Dispatcher ────────────────────────────────────────────────────────────────
+builder.Services.AddSingleton<OperationDispatcher>();
+
+// ── gRPC bridge client (BackgroundService) ────────────────────────────────────
+builder.Services.AddSingleton<ProviderBridgeClient>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<ProviderBridgeClient>());
+
+// ── HTTP Management API ───────────────────────────────────────────────────────
+builder.Services.AddSingleton<NotificationService>();
+builder.Services.AddSingleton<DataManagementService>();
+builder.Services.AddControllers();
+
+// ── Build app ─────────────────────────────────────────────────────────────────
+var app = builder.Build();
 
 // ── Startup tasks ─────────────────────────────────────────────────────────────
 
-var logger  = host.Services.GetRequiredService<ILogger<Program>>();
-var excelOpts  = host.Services.GetRequiredService<IOptions<ExcelOptions>>().Value;
-var providerOpts = host.Services.GetRequiredService<IOptions<ProviderOptions>>().Value;
+var logger       = app.Services.GetRequiredService<ILogger<Program>>();
+var excelOpts    = app.Services.GetRequiredService<IOptions<ExcelOptions>>().Value;
+var providerOpts = app.Services.GetRequiredService<IOptions<ProviderOptions>>().Value;
 
 // 1. Generate sample Excel data if file does not exist
-var generator = host.Services.GetRequiredService<SampleDataGenerator>();
+var generator     = app.Services.GetRequiredService<SampleDataGenerator>();
 var excelFilePath = Path.Combine(excelOpts.DataPath, "SalesData.xlsx");
 try
 {
@@ -73,14 +85,13 @@ catch (Exception ex)
 }
 
 // 2. Auto-seed provider and operations in platform DB
-var pgConnStr = host.Services.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>()
-    .GetConnectionString("Postgres")
+var pgConnStr = config.GetConnectionString("Postgres")
     ?? "Host=localhost;Database=hdos;Username=hdos;Password=hdos";
 
 var seeder = new ProviderSeeder(
     pgConnStr,
-    host.Services.GetRequiredService<IOptions<ProviderOptions>>(),
-    host.Services.GetRequiredService<ILogger<ProviderSeeder>>());
+    app.Services.GetRequiredService<IOptions<ProviderOptions>>(),
+    app.Services.GetRequiredService<ILogger<ProviderSeeder>>());
 
 try
 {
@@ -93,7 +104,13 @@ catch (Exception ex)
 }
 
 logger.LogInformation(
-    "Excel Provider starting up — providerId={ProviderId}, bridge={Bridge}",
+    "Excel Provider starting — providerId={ProviderId}, bridge={Bridge}, httpPort=5600",
     providerOpts.ProviderId, providerOpts.BridgeGrpcUrl);
 
-await host.RunAsync();
+// ── HTTP middleware ────────────────────────────────────────────────────────────
+app.MapControllers();
+
+// Simple health-check endpoint
+app.MapGet("/health", () => Results.Ok(new { status = "ok", service = "excel-provider" }));
+
+await app.RunAsync();

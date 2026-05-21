@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk.Worker">
+<Project Sdk="Microsoft.NET.Sdk.Web">
   <PropertyGroup>
     <TargetFramework>net9.0</TargetFramework>
     <Nullable>enable</Nullable>
@@ -6,20 +6,16 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <RootNamespace>ReportingPlatform.ExcelProvider</RootNamespace>
     <AssemblyName>ReportingPlatform.Excel.Provider</AssemblyName>
-    <Nullable>enable</Nullable>
+    <!-- Microsoft.NET.Sdk.Web already provides ASP.NET Core, Hosting, Http, Logging, Json -->
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Grpc.Net.Client"                       Version="2.65.0" />
-    <PackageReference Include="Google.Protobuf"                       Version="3.29.3" />
-    <PackageReference Include="Grpc.Tools"                            Version="2.65.0" PrivateAssets="All" />
-    <PackageReference Include="EPPlus"                                Version="7.5.2" />
-    <PackageReference Include="BCrypt.Net-Next"                       Version="4.0.3" />
-    <PackageReference Include="Npgsql"                                Version="9.0.3" />
-    <PackageReference Include="Microsoft.Extensions.Hosting"          Version="9.0.4" />
-    <PackageReference Include="Microsoft.Extensions.Http"             Version="9.0.4" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Console"  Version="9.0.4" />
-    <PackageReference Include="System.Text.Json"                      Version="9.0.4" />
+    <PackageReference Include="Grpc.Net.Client"   Version="2.65.0" />
+    <PackageReference Include="Google.Protobuf"   Version="3.29.3" />
+    <PackageReference Include="Grpc.Tools"        Version="2.65.0" PrivateAssets="All" />
+    <PackageReference Include="EPPlus"            Version="7.5.2" />
+    <PackageReference Include="BCrypt.Net-Next"   Version="4.0.3" />
+    <PackageReference Include="Npgsql"            Version="9.0.3" />
   </ItemGroup>
 
   <ItemGroup>

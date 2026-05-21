@@ -21,6 +21,9 @@ public sealed class ProviderBridgeClient : BackgroundService
         "report.sales.trend",
         "report.inventory.status",
         "report.regional.performance",
+        "report.channel.comparison",
+        "report.product.detail",
+        "report.top.performers",
     ];
 
     // Exponential backoff steps in milliseconds (5s → 15s → 30s → 60s → 120s)
