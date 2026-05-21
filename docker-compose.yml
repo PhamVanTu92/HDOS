@@ -99,7 +99,7 @@ services:
       KEYCLOAK_ADMIN:          admin
       KEYCLOAK_ADMIN_PASSWORD: Admin123!
       KC_HOSTNAME:             "${HDOS_HOST:-localhost}"
-      KC_HOSTNAME_PORT:        "8443"
+      KC_HOSTNAME_PORT:        "443"
       KC_HOSTNAME_STRICT:      "false"
       KC_HTTP_ENABLED:         "true"
       KC_HEALTH_ENABLED:       "true"
@@ -399,7 +399,7 @@ services:
       dockerfile: Dockerfile
       args:
         # HTTPS URLs — qua tls-proxy (self-signed cert)
-        VITE_KEYCLOAK_URL:       "https://${HDOS_HOST:-localhost}:8443"
+        VITE_KEYCLOAK_URL:       "https://${HDOS_HOST:-localhost}"
         VITE_KEYCLOAK_REALM:     hdos
         VITE_KEYCLOAK_CLIENT_ID: hdos-web
         VITE_GATEWAY_URL:        "https://${HDOS_HOST:-localhost}"
