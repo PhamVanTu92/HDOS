@@ -104,7 +104,7 @@ services:
       - keycloak_data:/opt/keycloak/data
       - ./keycloak/realm-import.json:/opt/keycloak/data/import/realm-import.json:ro
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:8080/health/ready || exit 1"]
+      test: ["CMD-SHELL", "curl -sf http://localhost:9000/health/ready || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5
