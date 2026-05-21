@@ -17,6 +17,12 @@
     <ProjectReference Include="..\..\Shared\Contracts\Contracts.csproj" />
     <ProjectReference Include="..\..\Shared\Telemetry\Telemetry.csproj" />
     <ProjectReference Include="..\..\Shared\Caching\Caching.csproj" />
+    <ProjectReference Include="..\..\Shared\Metadata\Metadata.csproj" />
+    <ProjectReference Include="..\..\Shared\QueryBuilder\QueryBuilder.csproj" />
+    <ProjectReference Include="..\..\Shared\Adapters\Adapters.csproj" />
+    <ProjectReference Include="..\..\Shared\Transformers\Transformers.csproj" />
+    <ProjectReference Include="..\..\Shared\Resolver\Resolver.csproj" />
+    <ProjectReference Include="..\..\Shared\Providers\Providers.csproj" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="MassTransit.RabbitMQ" Version="8.2.5" />

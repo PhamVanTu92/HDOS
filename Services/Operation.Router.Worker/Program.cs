@@ -1,10 +1,17 @@
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Npgsql;
+using ReportingPlatform.Adapters.Extensions;
 using ReportingPlatform.Caching;
+using ReportingPlatform.Metadata.Extensions;
 using ReportingPlatform.Operations.Dispatcher;
 using ReportingPlatform.Operations.Extensions;
+using ReportingPlatform.Providers.Extensions;
+using ReportingPlatform.QueryBuilder.Extensions;
+using ReportingPlatform.Resolver.Extensions;
 using ReportingPlatform.Router.Consumers;
 using ReportingPlatform.Router.Options;
 using ReportingPlatform.Telemetry;
+using ReportingPlatform.Transformers.Extensions;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -38,6 +45,16 @@ builder.Services.AddPlatformTelemetry(builder.Configuration, "Operation.Router.W
 
 builder.Services.AddStackExchangeRedisCache(o => o.Configuration = redisConnStr);
 builder.Services.AddPlatformCaching(builder.Configuration);
+
+// Full platform stack — required because OperationRequestConsumer dispatches to
+// OperationDispatcher which executes all registered IOperationHandler implementations.
+builder.Services.AddSingleton(_ => NpgsqlDataSource.Create(pgConnStr));
+builder.Services.AddPlatformMetadata();
+builder.Services.AddPlatformQueryBuilder(builder.Configuration);
+builder.Services.AddPlatformTransformers();
+builder.Services.AddPlatformAdapters(builder.Configuration);
+builder.Services.AddPlatformResolver(builder.Configuration);
+builder.Services.AddPlatformProvidersWithExistingDataSource();
 builder.Services.AddPlatformOperations();
 
 // ------------------------------------------------------------------

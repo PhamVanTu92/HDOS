@@ -2,6 +2,7 @@ using MassTransit;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Npgsql;
 using ReportingPlatform.Contracts.Envelopes;
 using ReportingPlatform.EventProcessor.Consumers;
 using ReportingPlatform.EventProcessor.Services;
@@ -53,8 +54,9 @@ builder.Services.AddSingleton<IHubContext<MainHub, IMainHubClient>>(sp =>
 // Metadata — event subscription repository
 // ------------------------------------------------------------------
 
+// PostgresEventSubscriptionRepository takes NpgsqlDataSource (not a raw string).
 builder.Services.AddSingleton<IEventSubscriptionRepository>(
-    new PostgresEventSubscriptionRepository(pgConnStr));
+    new PostgresEventSubscriptionRepository(NpgsqlDataSource.Create(pgConnStr)));
 
 // ------------------------------------------------------------------
 // Domain service

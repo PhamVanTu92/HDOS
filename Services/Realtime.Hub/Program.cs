@@ -1,6 +1,5 @@
 using MassTransit;
 using ReportingPlatform.Caching;
-using ReportingPlatform.Operations.Extensions;
 using ReportingPlatform.Telemetry;
 using StackExchange.Redis;
 
@@ -23,9 +22,6 @@ builder.Services.AddMassTransit(x =>
 {
     x.UsingRabbitMq((_, cfg) => cfg.Host(new Uri(rabbitUri)));
 });
-
-// ── Platform operations (RequestSubmissionService, ICancelBus, etc.) ──────
-builder.Services.AddPlatformOperations();
 
 // ── JWT authentication (query-param token for Hub negotiation) ───────────
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
