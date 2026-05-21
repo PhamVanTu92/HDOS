@@ -19,5 +19,6 @@ RUN dotnet publish "Services/Ingestion.Api/Ingestion.Api.csproj" \
 # ── Runtime image ─────────────────────────────────────────────────────────────
 FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS runtime
 WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
 COPY --from=build /app/publish .
 ENTRYPOINT ["dotnet", "ReportingPlatform.Ingestion.Api.dll"]
