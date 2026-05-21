@@ -24,13 +24,23 @@ builder.Services.AddMassTransit(x =>
 });
 
 // ── JWT authentication (query-param token for Hub negotiation) ───────────
+var publicIssuer = builder.Configuration["Auth:PublicIssuer"] ?? jwtAuth;
+
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(o =>
     {
+        o.MetadataAddress      = $"{jwtAuth}/.well-known/openid-configuration";
         o.Authority            = jwtAuth;
         o.Audience             = jwtAud;
         o.RequireHttpsMetadata = false;   // Keycloak chạy HTTP trong Docker
-        o.Events    = new JwtBearerEvents
+        o.TokenValidationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters
+        {
+            ValidIssuers  = [jwtAuth, publicIssuer],
+            ValidAudience = jwtAud,
+            ValidateLifetime = true,
+            ClockSkew = System.TimeSpan.FromSeconds(30),
+        };
+        o.Events = new JwtBearerEvents
         {
             OnMessageReceived = ctx =>
             {

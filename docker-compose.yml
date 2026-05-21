@@ -150,6 +150,7 @@ services:
       ASPNETCORE_URLS:        http://+:5500
       Auth__Authority:        "${AUTH_AUTHORITY:-http://keycloak:8080/realms/hdos}"
       Auth__Audience:         "${AUTH_AUDIENCE:-reporting-platform}"
+      Auth__PublicIssuer:     "https://${HDOS_HOST:-localhost}/realms/hdos"
       # CORS: trình duyệt gọi qua tls-proxy (https://IP), cần cho phép origin đó
       Cors__AllowedOrigins__0: "${CORS_ORIGIN_0:-https://${HDOS_HOST:-localhost}}"
       Cors__AllowedOrigins__1: "${CORS_ORIGIN_1:-https://localhost}"
@@ -187,6 +188,7 @@ services:
       RabbitMQ__Uri:            amqp://guest:guest@rabbitmq/
       Auth__Authority:          "${AUTH_AUTHORITY:-http://keycloak:8080/realms/hdos}"
       Auth__Audience:           "${AUTH_AUDIENCE:-reporting-platform}"
+      Auth__PublicIssuer:       "https://${HDOS_HOST:-localhost}/realms/hdos"
       ConnectionStrings__Postgres: "Host=postgres;Database=hdos;Username=hdos;Password=hdos"
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -254,6 +256,7 @@ services:
       RabbitMQ__Uri:            amqp://guest:guest@rabbitmq/
       Auth__Authority:          "${AUTH_AUTHORITY:-http://keycloak:8080/realms/hdos}"
       Auth__Audience:           "${AUTH_AUDIENCE:-reporting-platform}"
+      Auth__PublicIssuer:       "https://${HDOS_HOST:-localhost}/realms/hdos"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:

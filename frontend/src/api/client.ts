@@ -1,41 +1,35 @@
 /**
- * Fetch wrapper that attaches Bearer token from the OIDC user store.
+ * HTTP client — đính kèm Bearer token từ oidc-client-ts sessionStorage.
  *
- * Reads the token directly from sessionStorage at call-time rather than via a
- * React closure.  oidc-client-ts writes the user to sessionStorage BEFORE it
- * fires the userLoaded event, so by the time any fetch (even one triggered
- * inside that event) executes, the token is already present in storage.
- *
- * This is race-condition-free: no registration step, no React render timing
- * dependency, no useEffect ordering issues.
+ * oidc-client-ts ghi user vào sessionStorage TRƯỚC khi fire sự kiện userLoaded,
+ * nên đọc từ storage lúc gọi là race-condition-free hoàn toàn.
  */
 
 const GATEWAY = import.meta.env.VITE_GATEWAY_URL as string;
 
-// Matches the key oidc-client-ts uses with its default SessionStorageStateStore.
-const OIDC_STORAGE_KEY = `oidc.user:${
-  import.meta.env.VITE_KEYCLOAK_URL as string
-}/realms/${import.meta.env.VITE_KEYCLOAK_REALM as string}:${
-  import.meta.env.VITE_KEYCLOAK_CLIENT_ID as string
-}`;
+// Key oidc-client-ts dùng với SessionStorageStateStore mặc định:
+// oidc.user:{authority}:{client_id}
+const OIDC_KEY = [
+  'oidc.user',
+  `${import.meta.env.VITE_KEYCLOAK_URL as string}/realms/${import.meta.env.VITE_KEYCLOAK_REALM as string}`,
+  import.meta.env.VITE_KEYCLOAK_CLIENT_ID as string,
+].join(':');
 
-function getAccessToken(): string | null {
+export function getAccessToken(): string | null {
   try {
-    const raw = sessionStorage.getItem(OIDC_STORAGE_KEY);
+    const raw = sessionStorage.getItem(OIDC_KEY);
     if (!raw) return null;
-    const user = JSON.parse(raw) as { access_token?: string };
-    return user.access_token ?? null;
+    const parsed = JSON.parse(raw) as { access_token?: string };
+    return parsed.access_token ?? null;
   } catch {
     return null;
   }
 }
 
-// Keep the registration API so other modules can still call it (no-op now).
-// This avoids having to update every call-site immediately.
-/** @deprecated Token is now read directly from sessionStorage. No-op. */
-export function registerTokenProvider(_fn: () => string | null) {
-  // intentionally empty — kept for backward compatibility
-}
+/** @deprecated No-op — kept for backward compatibility */
+export function registerTokenProvider(_fn: () => string | null): void { /* noop */ }
+
+// ── Headers ──────────────────────────────────────────────────────────────────
 
 function buildHeaders(extra?: Record<string, string>): Record<string, string> {
   const token = getAccessToken();
@@ -45,6 +39,8 @@ function buildHeaders(extra?: Record<string, string>): Record<string, string> {
     ...extra,
   };
 }
+
+// ── Error ─────────────────────────────────────────────────────────────────────
 
 export class ApiError extends Error {
   constructor(
@@ -57,26 +53,22 @@ export class ApiError extends Error {
   }
 }
 
+// ── Response handler ──────────────────────────────────────────────────────────
+
 async function handleResponse<T>(res: Response): Promise<T> {
   if (!res.ok) {
-    // Read body as text first to avoid "body stream already read" error when
-    // trying to call both res.json() and res.text() on the same response.
-    let body: unknown;
+    let body: unknown = null;
     try {
       const text = await res.text();
       body = text ? JSON.parse(text) : null;
-    } catch {
-      body = null;
-    }
-    throw new ApiError(
-      res.status,
-      `HTTP ${res.status} ${res.statusText}`,
-      body,
-    );
+    } catch { /* ignore */ }
+    throw new ApiError(res.status, `HTTP ${res.status} ${res.statusText}`, body);
   }
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
 }
+
+// ── Public API ────────────────────────────────────────────────────────────────
 
 export async function apiGet<T>(path: string): Promise<T> {
   const res = await fetch(`${GATEWAY}${path}`, {
@@ -96,4 +88,12 @@ export async function apiPost<TBody, TResponse>(
     body: JSON.stringify(body),
   });
   return handleResponse<TResponse>(res);
+}
+
+export async function apiDelete(path: string): Promise<void> {
+  const res = await fetch(`${GATEWAY}${path}`, {
+    method: 'DELETE',
+    headers: buildHeaders(),
+  });
+  await handleResponse<void>(res);
 }

@@ -86,13 +86,23 @@ builder.Services.AddHostedService<ProgressPubSubSubscriber>();
 builder.Services.AddHostedService<WidgetCacheInvalidationSubscriber>();
 
 // ── JWT authentication (user JWTs from external IdP) ─────────────────────
+var publicIssuer = builder.Configuration["Auth:PublicIssuer"] ?? jwtAuth;
+
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(o =>
     {
-        o.Authority                = jwtAuth;
-        o.Audience                 = jwtAud;
-        o.RequireHttpsMetadata     = false;   // Keycloak chạy HTTP trong Docker
-        o.Events    = new JwtBearerEvents
+        o.MetadataAddress      = $"{jwtAuth}/.well-known/openid-configuration";
+        o.Authority            = jwtAuth;
+        o.Audience             = jwtAud;
+        o.RequireHttpsMetadata = false;   // Keycloak chạy HTTP trong Docker
+        o.TokenValidationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters
+        {
+            ValidIssuers  = [jwtAuth, publicIssuer],
+            ValidAudience = jwtAud,
+            ValidateLifetime = true,
+            ClockSkew = System.TimeSpan.FromSeconds(30),
+        };
+        o.Events = new JwtBearerEvents
         {
             OnMessageReceived = ctx =>
             {
