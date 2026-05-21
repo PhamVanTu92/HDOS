@@ -6,15 +6,15 @@ namespace ReportingPlatform.Metadata.Repositories;
 
 public sealed class PostgresEventSubscriptionRepository : IEventSubscriptionRepository
 {
-    private readonly string _connectionString;
+    private readonly NpgsqlDataSource _db;
 
-    public PostgresEventSubscriptionRepository(string connectionString)
-        => _connectionString = connectionString;
+    public PostgresEventSubscriptionRepository(NpgsqlDataSource db)
+        => _db = db;
 
     public async Task<IReadOnlyList<EventSubscriptionRow>> GetSubscribersAsync(
         string tenantId, string eventType, CancellationToken ct = default)
     {
-        await using var conn = new NpgsqlConnection(_connectionString);
+        await using var conn = await _db.OpenConnectionAsync(ct);
         var rows = await conn.QueryAsync<EventSubscriptionRow>(
             """
             SELECT dashboard_code AS DashboardCode, widget_id AS WidgetId
@@ -32,8 +32,7 @@ public sealed class PostgresEventSubscriptionRepository : IEventSubscriptionRepo
         IReadOnlyList<(string WidgetId, string EventType)> subscriptions,
         CancellationToken ct = default)
     {
-        await using var conn = new NpgsqlConnection(_connectionString);
-        await conn.OpenAsync(ct);
+        await using var conn = await _db.OpenConnectionAsync(ct);
         await using var tx = await conn.BeginTransactionAsync(ct);
 
         // Remove existing subscriptions for this dashboard.
