@@ -14,10 +14,31 @@ import type {
 
 const GATEWAY = import.meta.env.VITE_GATEWAY_URL as string;
 
-let _getAccessToken: (() => string | null) | null = null;
+// Same key as in client.ts — oidc-client-ts stores the user here before
+// firing any events, so this is always populated when accessTokenFactory runs.
+const OIDC_STORAGE_KEY = `oidc.user:${
+  import.meta.env.VITE_KEYCLOAK_URL as string
+}/realms/${import.meta.env.VITE_KEYCLOAK_REALM as string}:${
+  import.meta.env.VITE_KEYCLOAK_CLIENT_ID as string
+}`;
 
-export function registerSignalRTokenProvider(fn: () => string | null) {
-  _getAccessToken = fn;
+function getAccessToken(): string {
+  try {
+    const raw = sessionStorage.getItem(OIDC_STORAGE_KEY);
+    if (!raw) return '';
+    const user = JSON.parse(raw) as { access_token?: string };
+    return user.access_token ?? '';
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * @deprecated Token is now read directly from sessionStorage. No-op.
+ * Kept for backward compatibility so call-sites don't need immediate updates.
+ */
+export function registerSignalRTokenProvider(_fn: () => string | null) {
+  // intentionally empty
 }
 
 export type SignalREventMap = {
@@ -41,7 +62,8 @@ class SignalRClient {
   private buildConnection(): HubConnection {
     return new HubConnectionBuilder()
       .withUrl(`${GATEWAY}/hubs/main`, {
-        accessTokenFactory: () => _getAccessToken?.() ?? '',
+        // Reads from sessionStorage at negotiation time — always fresh.
+        accessTokenFactory: () => getAccessToken(),
       })
       .withHubProtocol(new MessagePackHubProtocol())
       .withAutomaticReconnect([0, 2000, 5000, 10000, 30000])
