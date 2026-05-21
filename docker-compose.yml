@@ -40,7 +40,7 @@ services:
     image: redis:7-alpine
     command: redis-server --appendonly yes
     ports:
-      - "6379:6379"
+      - "6380:6379"   # host 6380 → container 6379 (tránh xung đột với Redis local)
     volumes:
       - redis_data:/data
     healthcheck:
