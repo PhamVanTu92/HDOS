@@ -38,6 +38,21 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         // nhưng Docker container không reach được host LAN IP qua published port.
         opts.BackchannelHttpHandler = new KeycloakInternalHandler(publicIssuer);
 
+        // SignalR WebSocket không thể set Authorization header —
+        // token được truyền qua query string ?access_token=...
+        opts.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = ctx =>
+            {
+                if (ctx.HttpContext.Request.Path.StartsWithSegments("/hubs"))
+                {
+                    var token = ctx.Request.Query["access_token"].ToString();
+                    if (!string.IsNullOrEmpty(token)) ctx.Token = token;
+                }
+                return Task.CompletedTask;
+            },
+        };
+
         opts.TokenValidationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters
         {
             ValidIssuers  = [authority, publicIssuer],
