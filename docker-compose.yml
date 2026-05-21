@@ -187,6 +187,7 @@ services:
       interval: 15s
       timeout: 5s
       retries: 3
+      start_period: 20s
     networks:
       - platform
 
@@ -210,10 +211,11 @@ services:
       rabbitmq:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:5400/healthz || exit 1"]
+      test: ["CMD-SHELL", "curl -sf --http2-prior-knowledge http://localhost:5400/healthz/live || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 3
+      start_period: 20s
     networks:
       - platform
 
