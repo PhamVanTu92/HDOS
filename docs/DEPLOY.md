@@ -61,11 +61,26 @@ HDOS/
 Tạo file `.env` tại root repo trước khi chạy compose:
 
 ```bash
+cp .env.example .env
+nano .env
+```
+
+> ⚠️ **CORS quan trọng**: **KHÔNG dùng `*` cho `CORS_ORIGIN_*`**.
+> Gateway bật `AllowCredentials()` cho SignalR — ASP.NET Core cấm kết hợp
+> wildcard `"*"` + `AllowCredentials()` và sẽ **crash khi khởi động**.
+> Phải liệt kê origin cụ thể.
+
+```bash
 # .env — KHÔNG commit file này vào git
-AUTH_AUTHORITY=https://your-oidc-provider.com
+AUTH_AUTHORITY=          # để trống = tắt JWT (dev only)
 AUTH_AUDIENCE=reporting-platform
-CORS_ORIGIN_0=https://your-frontend.com
-CORS_ORIGIN_1=http://localhost:3000
+
+# ✅ Đúng — origin cụ thể
+CORS_ORIGIN_0=http://localhost:3000
+CORS_ORIGIN_1=http://localhost:5173
+
+# ❌ Sai — sẽ crash Gateway khi start
+# CORS_ORIGIN_0=*
 ```
 
 | Biến | Bắt buộc | Mô tả |
