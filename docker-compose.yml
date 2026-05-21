@@ -291,8 +291,8 @@ services:
       dockerfile: Services/Event.Processor.Worker/Dockerfile
     environment:
       DOTNET_ENVIRONMENT:          Development
-      Redis__ConnectionString:     redis:6379
-      RabbitMQ__Uri:               amqp://guest:guest@rabbitmq/
+      ConnectionStrings__Redis:    redis:6379
+      ConnectionStrings__RabbitMQ: amqp://guest:guest@rabbitmq/
       ConnectionStrings__Postgres: "Host=postgres;Database=hdos;Username=hdos;Password=hdos"
       Hub__Url:                    http://realtime-hub:5200
     depends_on:
