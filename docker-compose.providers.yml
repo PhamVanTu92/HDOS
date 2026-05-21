@@ -43,7 +43,33 @@ services:
     networks:
       - platform
 
+  excel-provider:
+    build:
+      context: .
+      dockerfile: Services/Excel.Provider/Dockerfile
+    environment:
+      DOTNET_ENVIRONMENT:                   "Development"
+      Provider__ProviderId:                 "excel-provider"
+      Provider__ClientId:                   "excel-provider"
+      Provider__ClientSecret:               "${EXCEL_PROVIDER_SECRET:-excel-secret-dev-2024}"
+      Provider__TokenEndpoint:              "http://request-api:5000/api/v1/providers/token"
+      Provider__BridgeGrpcUrl:              "http://provider-bridge:5400"
+      Excel__DataPath:                      "/app/ExcelData"
+      ConnectionStrings__Postgres:          "Host=postgres;Database=hdos;Username=hdos;Password=hdos"
+    volumes:
+      - excel_provider_data:/app/ExcelData
+    depends_on:
+      - request-api
+      - provider-bridge
+      - postgres
+    restart: unless-stopped
+    networks:
+      - platform
+
 networks:
   platform:
     external: true
     name: hdos_platform
+
+volumes:
+  excel_provider_data:

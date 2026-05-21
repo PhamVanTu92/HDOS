@@ -12,6 +12,12 @@
 #   6379 → redis
 #   5672 → rabbitmq (AMQP)
 #  15672 → rabbitmq (management UI)
+#   8180 → keycloak         (identity provider UI + OIDC)
+#   3000 → frontend         (React SPA)
+#
+# First-time setup:
+#   1. Copy .env.example → .env and fill in HDOS_HOST (your server IP)
+#   2. docker compose up -d
 
 services:
 
@@ -69,6 +75,41 @@ services:
     networks:
       - platform
 
+  # ─── Auth: Keycloak (identity provider) ──────────────────────────────────────
+  #
+  # HDOS_HOST must be set in .env to the IP/hostname reachable from BOTH:
+  #   • Docker containers (via host networking)
+  #   • User browsers
+  # Example: HDOS_HOST=192.168.1.100   (server LAN IP)
+  # Local dev: HDOS_HOST=host.docker.internal (add 127.0.0.1 host.docker.internal to hosts)
+  #
+  # Admin UI: http://<HDOS_HOST>:8180  login: admin / Admin123!
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:25.0
+    command: start-dev --import-realm
+    environment:
+      KEYCLOAK_ADMIN:          admin
+      KEYCLOAK_ADMIN_PASSWORD: Admin123!
+      KC_HOSTNAME:             "${HDOS_HOST:-host.docker.internal}"
+      KC_HOSTNAME_PORT:        "8180"
+      KC_HOSTNAME_STRICT:      "false"
+      KC_HTTP_ENABLED:         "true"
+      KC_HEALTH_ENABLED:       "true"
+    ports:
+      - "8180:8080"
+    volumes:
+      - keycloak_data:/opt/keycloak/data
+      - ./keycloak/realm-import.json:/opt/keycloak/data/import/realm-import.json:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/health/ready || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+    networks:
+      - platform
+
   # ─── Phase 11: Gateway (public ingress) ──────────────────────────────────────
 
   gateway:
@@ -78,10 +119,12 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS:        http://+:5500
-      Auth__Authority:        "${AUTH_AUTHORITY:-}"
+      Auth__Authority:        "${AUTH_AUTHORITY:-http://${HDOS_HOST:-host.docker.internal}:8180/realms/hdos}"
       Auth__Audience:         "${AUTH_AUDIENCE:-reporting-platform}"
       Cors__AllowedOrigins__0: "${CORS_ORIGIN_0:-http://localhost:3000}"
       Cors__AllowedOrigins__1: "${CORS_ORIGIN_1:-http://localhost:5173}"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "5500:5500"
     depends_on:
@@ -111,9 +154,11 @@ services:
       ASPNETCORE_URLS:          http://+:5000
       Redis__ConnectionString:  redis:6379
       RabbitMQ__Uri:            amqp://guest:guest@rabbitmq/
-      Auth__Authority:          "${AUTH_AUTHORITY:-}"
+      Auth__Authority:          "${AUTH_AUTHORITY:-http://${HDOS_HOST:-host.docker.internal}:8180/realms/hdos}"
       Auth__Audience:           "${AUTH_AUDIENCE:-reporting-platform}"
       ConnectionStrings__Postgres: "Host=postgres;Database=hdos;Username=hdos;Password=hdos"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "5000:5000"
     depends_on:
@@ -143,9 +188,11 @@ services:
       Redis__ConnectionString:     redis:6379
       ConnectionStrings__RabbitMQ: amqp://guest:guest@rabbitmq/
       ConnectionStrings__Redis:    redis:6379
-      Auth__Authority:             "${AUTH_AUTHORITY:-}"
+      Auth__Authority:             "${AUTH_AUTHORITY:-http://${HDOS_HOST:-host.docker.internal}:8180/realms/hdos}"
       Auth__Audience:              "${AUTH_AUDIENCE:-reporting-platform}"
       ConnectionStrings__Postgres: "Host=postgres;Database=hdos;Username=hdos;Password=hdos"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "5100:5100"
     depends_on:
@@ -174,8 +221,10 @@ services:
       ASPNETCORE_URLS:          http://+:5200
       Redis__ConnectionString:  redis:6379
       RabbitMQ__Uri:            amqp://guest:guest@rabbitmq/
-      Auth__Authority:          "${AUTH_AUTHORITY:-}"
+      Auth__Authority:          "${AUTH_AUTHORITY:-http://${HDOS_HOST:-host.docker.internal}:8180/realms/hdos}"
       Auth__Audience:           "${AUTH_AUDIENCE:-reporting-platform}"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "5200:5200"
     depends_on:
@@ -307,12 +356,60 @@ services:
     networks:
       - platform
 
+  # ─── Provider: Excel Data Provider ───────────────────────────────────────────
+
+  excel-provider:
+    build:
+      context: .
+      dockerfile: Services/Excel.Provider/Dockerfile
+    restart: unless-stopped
+    environment:
+      DOTNET_ENVIRONMENT:          Development
+      Provider__ClientId:          excel-provider
+      Provider__ClientSecret:      "${EXCEL_PROVIDER_SECRET:-excel-secret-dev-2024}"
+      Provider__TokenEndpoint:     http://request-api:5000/api/v1/providers/token
+      Provider__BridgeGrpcUrl:     http://provider-bridge:5400
+      ConnectionStrings__Postgres: "Host=postgres;Database=hdos;Username=hdos;Password=hdos"
+      Excel__DataPath:             /app/ExcelData
+    volumes:
+      - excel_data:/app/ExcelData
+    depends_on:
+      postgres:
+        condition: service_healthy
+      provider-bridge:
+        condition: service_healthy
+    networks:
+      - platform
+
+  # ─── Frontend: React SPA ─────────────────────────────────────────────────────
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_KEYCLOAK_URL:       "http://${HDOS_HOST:-host.docker.internal}:8180"
+        VITE_KEYCLOAK_REALM:     hdos
+        VITE_KEYCLOAK_CLIENT_ID: hdos-web
+        VITE_GATEWAY_URL:        "http://${HDOS_HOST:-host.docker.internal}:5500"
+    ports:
+      - "3000:3000"
+    depends_on:
+      gateway:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+    networks:
+      - platform
+
 # ─── Volumes & Networks ───────────────────────────────────────────────────────
 
 volumes:
   postgres_data:
   redis_data:
   rabbitmq_data:
+  keycloak_data:
+  excel_data:
 
 networks:
   platform:

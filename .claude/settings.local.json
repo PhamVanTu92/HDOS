@@ -57,7 +57,10 @@
       "Bash(git commit -m 'fix\\(startup\\): lazy Redis connect in event-processor + add Redis env to provider-bridge *)",
       "Bash(git commit -m 'fix\\(config\\): Redis connection string fallback + RabbitMQ for provider-bridge *)",
       "Bash(git commit -m 'fix\\(healthcheck\\): provider-bridge use http2-prior-knowledge + fix URL; add start_period *)",
-      "Bash(git commit -m 'fix\\(compose\\): add Postgres connection string + depends_on for provider-bridge *)"
+      "Bash(git commit -m 'fix\\(compose\\): add Postgres connection string + depends_on for provider-bridge *)",
+      "Bash(New-Item -Path \"E:\\\\Project\\\\HDOS\\\\.env.example\" -ItemType File -Force)",
+      "Bash(Out-Null)",
+      "Bash(Write-Output \"created\")"
     ]
   }
 }
