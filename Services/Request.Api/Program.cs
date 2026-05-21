@@ -94,7 +94,8 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         o.MetadataAddress      = $"{jwtAuth}/.well-known/openid-configuration";
         o.Authority            = jwtAuth;
         o.Audience             = jwtAud;
-        o.RequireHttpsMetadata = false;   // Keycloak chạy HTTP trong Docker
+        o.RequireHttpsMetadata = false;
+        o.BackchannelHttpHandler = new KeycloakInternalHandler(publicIssuer);
         o.TokenValidationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters
         {
             ValidIssuers  = [jwtAuth, publicIssuer],
@@ -190,3 +191,23 @@ app.MapHealthChecks("/healthz/ready",
 await app.RunAsync();
 
 public partial class Program { }
+
+/// <summary>Rewrite public Keycloak HTTPS URL → internal Docker HTTP URL.</summary>
+sealed file class KeycloakInternalHandler : HttpClientHandler
+{
+    private readonly string _externalHost;
+    public KeycloakInternalHandler(string publicIssuerUrl)
+    {
+        _externalHost = new Uri(publicIssuerUrl).Host;
+        ServerCertificateCustomValidationCallback =
+            HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
+    }
+    protected override Task<HttpResponseMessage> SendAsync(
+        HttpRequestMessage request, CancellationToken ct)
+    {
+        if (request.RequestUri?.Host == _externalHost)
+            request.RequestUri = new UriBuilder(request.RequestUri)
+                { Scheme = "http", Host = "keycloak", Port = 8080 }.Uri;
+        return base.SendAsync(request, ct);
+    }
+}

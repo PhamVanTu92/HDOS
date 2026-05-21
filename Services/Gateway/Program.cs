@@ -25,20 +25,22 @@ builder.Services.AddPlatformTelemetry(builder.Configuration, "Gateway");
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(opts =>
     {
-        // MetadataAddress trỏ thẳng vào Keycloak internal (HTTP) để tránh vấn đề
-        // SSL cert tự ký khi fetch discovery doc từ public HTTPS URL.
-        var authority = builder.Configuration["Auth:Authority"]!;   // http://keycloak:8080/realms/hdos
+        var authority    = builder.Configuration["Auth:Authority"]!;   // http://keycloak:8080/realms/hdos
         var publicIssuer = builder.Configuration["Auth:PublicIssuer"] ?? authority;
 
         opts.MetadataAddress      = $"{authority}/.well-known/openid-configuration";
         opts.Authority            = authority;
         opts.Audience             = builder.Configuration["Auth:Audience"];
-        opts.RequireHttpsMetadata = false;   // Keycloak internal chạy HTTP
+        opts.RequireHttpsMetadata = false;
+
+        // BackchannelHttpHandler: rewrite mọi URL public Keycloak → internal Docker.
+        // Vì jwks_uri trong discovery doc trỏ tới public HTTPS (https://IP/...),
+        // nhưng Docker container không reach được host LAN IP qua published port.
+        opts.BackchannelHttpHandler = new KeycloakInternalHandler(publicIssuer);
+
         opts.TokenValidationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters
         {
-            // Chấp nhận cả internal URL và public HTTPS URL làm issuer.
-            // Keycloak trả iss = public URL (KC_HOSTNAME), còn Authority = internal URL.
-            ValidIssuers = [authority, publicIssuer],
+            ValidIssuers  = [authority, publicIssuer],
             ValidAudience = builder.Configuration["Auth:Audience"],
             ValidateLifetime = true,
             ClockSkew = System.TimeSpan.FromSeconds(30),
@@ -202,4 +204,39 @@ app.Run();
 namespace ReportingPlatform.Gateway
 {
     public partial class Program { }
+}
+
+/// <summary>
+/// HttpClientHandler dùng cho JwtBearer backchannel.
+/// Rewrite mọi request tới public Keycloak URL (https://IP/...)
+/// sang internal Docker URL (http://keycloak:8080/...).
+/// Cần thiết vì OIDC discovery doc trả jwks_uri = public HTTPS URL,
+/// nhưng Docker container không reach được host LAN IP qua published port.
+/// </summary>
+sealed file class KeycloakInternalHandler : HttpClientHandler
+{
+    private readonly string _externalHost;
+
+    public KeycloakInternalHandler(string publicIssuerUrl)
+    {
+        _externalHost = new Uri(publicIssuerUrl).Host;  // e.g. "192.168.100.62"
+        ServerCertificateCustomValidationCallback =
+            HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
+    }
+
+    protected override Task<HttpResponseMessage> SendAsync(
+        HttpRequestMessage request, CancellationToken cancellationToken)
+    {
+        // https://192.168.100.62/realms/... → http://keycloak:8080/realms/...
+        if (request.RequestUri?.Host == _externalHost)
+        {
+            request.RequestUri = new UriBuilder(request.RequestUri)
+            {
+                Scheme = "http",
+                Host   = "keycloak",
+                Port   = 8080,
+            }.Uri;
+        }
+        return base.SendAsync(request, cancellationToken);
+    }
 }
