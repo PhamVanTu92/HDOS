@@ -1,5 +1,5 @@
 import { type ReactNode, useState } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink } from 'react-router-dom';
 import { useAuth } from 'react-oidc-context';
 import { useSignalRConnection } from '../hooks/useSignalR';
 
@@ -41,7 +41,6 @@ const NAV_ITEMS: NavItem[] = [
 
 export function Layout({ children }: { children: ReactNode }) {
   const auth = useAuth();
-  const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
   // Manages the global SignalR connection lifecycle
