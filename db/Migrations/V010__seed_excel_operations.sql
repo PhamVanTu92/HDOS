@@ -1,45 +1,12 @@
--- V009: Seed Excel Data Provider registration
--- NOTE: This migration only runs on FIRST Postgres start (initdb).
--- For existing deployments, the Excel.Provider service auto-seeds on startup.
+-- V010: Seed operation_registry entries for Excel Provider operations.
 --
--- Provider credentials:
---   clientId:     excel-provider
---   clientSecret: excel-secret-dev-2024   ← hashed below via pgcrypto
-
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
-
--- ── Provider registration ─────────────────────────────────────────────────────
-
-INSERT INTO provider_registry (
-    provider_id,
-    display_name,
-    description,
-    client_id,
-    client_secret_hash,
-    operations,
-    timeout_ms,
-    priority,
-    status
-)
-VALUES (
-    'excel-provider',
-    'Excel Data Provider',
-    'Serves realtime dashboard KPIs and analytical reports from Excel data source',
-    'excel-provider',
-    crypt('excel-secret-dev-2024', gen_salt('bf', 11)),
-    ARRAY[
-        'report.dashboard.summary',
-        'report.sales.trend',
-        'report.inventory.status',
-        'report.regional.performance'
-    ],
-    60000,
-    5,
-    'active'
-)
-ON CONFLICT (provider_id) DO NOTHING;
-
--- ── Operation registry ────────────────────────────────────────────────────────
+-- These operation patterns must exist in the HDOS operation_registry so that
+-- RequestSubmissionService can resolve and route incoming requests.
+--
+-- Provider credentials (provider_registry) are managed by the Excel Provider
+-- service itself — this migration does NOT touch provider_registry.
+--
+-- Safe to re-run: all inserts use ON CONFLICT DO NOTHING.
 
 INSERT INTO operation_registry (
     operation_pattern,
@@ -71,12 +38,12 @@ VALUES
         "type": "object",
         "required": ["totalRevenue","totalUnits","topRegion","topProduct","revenueByChannel","alerts"],
         "properties": {
-            "totalRevenue":      {"type": "number"},
-            "totalUnits":        {"type": "integer"},
-            "topRegion":         {"type": "string"},
-            "topProduct":        {"type": "string"},
-            "revenueByChannel":  {"type": "object", "properties": {"online":{"type":"number"},"store":{"type":"number"}}},
-            "alerts":            {"type": "array", "items": {"type": "string"}}
+            "totalRevenue":     {"type": "number"},
+            "totalUnits":       {"type": "integer"},
+            "topRegion":        {"type": "string"},
+            "topProduct":       {"type": "string"},
+            "revenueByChannel": {"type": "object", "properties": {"online":{"type":"number"},"store":{"type":"number"}}},
+            "alerts":           {"type": "array", "items": {"type": "string"}}
         }
     }'::jsonb,
     30000,
@@ -149,7 +116,11 @@ VALUES
             },
             "summary": {
                 "type": "object",
-                "properties": {"ok":{"type":"integer"},"low":{"type":"integer"},"out":{"type":"integer"}}
+                "properties": {
+                    "ok":  {"type": "integer"},
+                    "low": {"type": "integer"},
+                    "out": {"type": "integer"}
+                }
             }
         }
     }'::jsonb,
@@ -194,6 +165,68 @@ VALUES
     30000,
     TRUE,
     60,
+    TRUE,
+    'active'
+),
+
+-- Channel comparison
+(
+    'report.channel.comparison',
+    'provider',
+    'excel-provider',
+    '{
+        "type": "object",
+        "properties": {
+            "period": {"type": "string", "enum": ["today","week","month"], "default": "week"}
+        },
+        "additionalProperties": false
+    }'::jsonb,
+    NULL,
+    60000,
+    TRUE,
+    300,
+    TRUE,
+    'active'
+),
+
+-- Product detail
+(
+    'report.product.detail',
+    'provider',
+    'excel-provider',
+    '{
+        "type": "object",
+        "required": ["productId"],
+        "properties": {
+            "productId": {"type": "string"}
+        },
+        "additionalProperties": false
+    }'::jsonb,
+    NULL,
+    60000,
+    TRUE,
+    300,
+    TRUE,
+    'active'
+),
+
+-- Top performers
+(
+    'report.top.performers',
+    'provider',
+    'excel-provider',
+    '{
+        "type": "object",
+        "properties": {
+            "limit":  {"type": "integer", "minimum": 1, "maximum": 50, "default": 10},
+            "period": {"type": "string", "enum": ["today","week","month"], "default": "month"}
+        },
+        "additionalProperties": false
+    }'::jsonb,
+    NULL,
+    30000,
+    TRUE,
+    120,
     TRUE,
     'active'
 )
