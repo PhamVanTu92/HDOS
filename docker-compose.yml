@@ -138,12 +138,13 @@ services:
       context: .
       dockerfile: Services/Ingestion.Api/Dockerfile
     environment:
-      ASPNETCORE_ENVIRONMENT:   Development
-      ASPNETCORE_URLS:          http://+:5100
-      Redis__ConnectionString:  redis:6379
-      RabbitMQ__Uri:            amqp://guest:guest@rabbitmq/
-      Auth__Authority:          "${AUTH_AUTHORITY:-}"
-      Auth__Audience:           "${AUTH_AUDIENCE:-reporting-platform}"
+      ASPNETCORE_ENVIRONMENT:      Development
+      ASPNETCORE_URLS:             http://+:5100
+      Redis__ConnectionString:     redis:6379
+      ConnectionStrings__RabbitMQ: amqp://guest:guest@rabbitmq/
+      ConnectionStrings__Redis:    redis:6379
+      Auth__Authority:             "${AUTH_AUTHORITY:-}"
+      Auth__Audience:              "${AUTH_AUDIENCE:-reporting-platform}"
       ConnectionStrings__Postgres: "Host=postgres;Database=hdos;Username=hdos;Password=hdos"
     ports:
       - "5100:5100"
