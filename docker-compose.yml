@@ -3,23 +3,29 @@
 # Providers overlay: docker compose -f docker-compose.yml -f docker-compose.providers.yml up -d
 #
 # Port map (host → container):
-#   5500 → gateway          (public entry point)
-#   5000 → request-api      (internal, reachable via gateway only)
-#   5100 → ingestion-api    (internal, reachable via gateway only)
-#   5200 → realtime-hub     (internal, reachable via gateway only)
+#    443 → tls-proxy        (HTTPS frontend + gateway — public entry point)
+#   8443 → tls-proxy        (HTTPS Keycloak)
+#   5500 → gateway          (HTTP — internal, tls-proxy → gateway)
+#   5000 → request-api      (internal)
+#   5100 → ingestion-api    (internal)
+#   5200 → realtime-hub     (internal)
 #   5400 → provider-bridge  (gRPC — internal)
 #   5433 → postgres         (HDOS main DB)
 #   6380 → redis
 #   5672 → rabbitmq (AMQP)
 #  15672 → rabbitmq (management UI)
-#   8180 → keycloak         (identity provider UI + OIDC)
-#   3000 → frontend         (React SPA)
+#   8180 → keycloak         (HTTP — internal, tls-proxy → keycloak on 8443)
+#   3000 → frontend         (HTTP — internal, tls-proxy → frontend on 443)
 #
 # Excel Provider stack chạy riêng: https://github.com/PhamVanTu92/excel-provider
 #
 # First-time setup:
-#   1. Copy .env.example → .env and fill in HDOS_HOST (your server IP)
+#   1. Copy .env.example → .env and fill in HDOS_HOST (your server IP/hostname)
 #   2. docker compose up -d
+#
+# Truy cập:
+#   Frontend : https://<HDOS_HOST>          (accept self-signed cert warning)
+#   Keycloak : https://<HDOS_HOST>:8443     (admin: admin / Admin123!)
 
 services:
 
@@ -83,9 +89,8 @@ services:
   #   • Docker containers (via host networking)
   #   • User browsers
   # Example: HDOS_HOST=192.168.1.100   (server LAN IP)
-  # Local dev: HDOS_HOST=host.docker.internal (add 127.0.0.1 host.docker.internal to hosts)
   #
-  # Admin UI: http://<HDOS_HOST>:8180  login: admin / Admin123!
+  # Admin UI (HTTPS): https://<HDOS_HOST>:8443   login: admin / Admin123!
 
   keycloak:
     image: quay.io/keycloak/keycloak:25.0
@@ -93,24 +98,59 @@ services:
     environment:
       KEYCLOAK_ADMIN:          admin
       KEYCLOAK_ADMIN_PASSWORD: Admin123!
-      KC_HOSTNAME:             "${HDOS_HOST:-host.docker.internal}"
-      KC_HOSTNAME_PORT:        "8180"
+      KC_HOSTNAME:             "${HDOS_HOST:-localhost}"
+      KC_HOSTNAME_PORT:        "8443"
       KC_HOSTNAME_STRICT:      "false"
       KC_HTTP_ENABLED:         "true"
       KC_HEALTH_ENABLED:       "true"
+      # KC_PROXY=edge — Keycloak biết nó đứng sau nginx HTTPS proxy
+      KC_PROXY:                "edge"
     ports:
       - "8180:8080"
     volumes:
       - keycloak_data:/opt/keycloak/data
       - ./keycloak/realm-import.json:/opt/keycloak/data/import/realm-import.json:ro
     healthcheck:
-      # Keycloak 25 UBI image có sẵn curl — management port 9000
-      # /health/ready trả về {"status":"UP"} khi ready
+      # management port 9000, path /health/ready → {"status":"UP"}
       test: ["CMD-SHELL", "curl -sf http://localhost:9000/health/ready | grep -q UP || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5
       start_period: 90s
+    networks:
+      - platform
+
+  # ─── TLS Proxy (nginx — HTTPS termination) ───────────────────────────────────
+  #
+  # Sinh self-signed cert tự động lần đầu chạy (lưu vào volume tls_certs).
+  # Port 443  : frontend SPA + gateway API/hubs
+  # Port 8443 : Keycloak OIDC + Admin UI
+
+  tls-proxy:
+    image: nginx:alpine
+    entrypoint: >
+      /bin/sh -c "
+        apk add --no-cache openssl 2>/dev/null;
+        mkdir -p /etc/nginx/ssl;
+        if [ ! -f /etc/nginx/ssl/cert.pem ]; then
+          openssl req -x509 -nodes -days 3650 -newkey rsa:2048
+            -keyout /etc/nginx/ssl/key.pem
+            -out    /etc/nginx/ssl/cert.pem
+            -subj   '/CN=${HDOS_HOST:-localhost}' 2>/dev/null;
+        fi;
+        exec nginx -g 'daemon off;'
+      "
+    volumes:
+      - ./nginx/tls-proxy.conf:/etc/nginx/nginx.conf:ro
+      - tls_certs:/etc/nginx/ssl
+    ports:
+      - "443:443"
+      - "8443:8443"
+    depends_on:
+      - frontend
+      - gateway
+      - keycloak
+    restart: unless-stopped
     networks:
       - platform
 
@@ -123,10 +163,12 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS:        http://+:5500
-      Auth__Authority:        "${AUTH_AUTHORITY:-http://${HDOS_HOST:-host.docker.internal}:8180/realms/hdos}"
+      Auth__Authority:        "${AUTH_AUTHORITY:-http://keycloak:8080/realms/hdos}"
       Auth__Audience:         "${AUTH_AUDIENCE:-reporting-platform}"
-      Cors__AllowedOrigins__0: "${CORS_ORIGIN_0:-http://localhost:3000}"
-      Cors__AllowedOrigins__1: "${CORS_ORIGIN_1:-http://localhost:5173}"
+      # CORS: trình duyệt gọi qua tls-proxy (https://IP), cần cho phép origin đó
+      Cors__AllowedOrigins__0: "${CORS_ORIGIN_0:-https://${HDOS_HOST:-localhost}}"
+      Cors__AllowedOrigins__1: "${CORS_ORIGIN_1:-https://localhost}"
+      Cors__AllowedOrigins__2: "${CORS_ORIGIN_2:-http://localhost:5173}"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
@@ -158,7 +200,7 @@ services:
       ASPNETCORE_URLS:          http://+:5000
       Redis__ConnectionString:  redis:6379
       RabbitMQ__Uri:            amqp://guest:guest@rabbitmq/
-      Auth__Authority:          "${AUTH_AUTHORITY:-http://${HDOS_HOST:-host.docker.internal}:8180/realms/hdos}"
+      Auth__Authority:          "${AUTH_AUTHORITY:-http://keycloak:8080/realms/hdos}"
       Auth__Audience:           "${AUTH_AUDIENCE:-reporting-platform}"
       ConnectionStrings__Postgres: "Host=postgres;Database=hdos;Username=hdos;Password=hdos"
     extra_hosts:
@@ -192,7 +234,7 @@ services:
       Redis__ConnectionString:     redis:6379
       ConnectionStrings__RabbitMQ: amqp://guest:guest@rabbitmq/
       ConnectionStrings__Redis:    redis:6379
-      Auth__Authority:             "${AUTH_AUTHORITY:-http://${HDOS_HOST:-host.docker.internal}:8180/realms/hdos}"
+      Auth__Authority:             "${AUTH_AUTHORITY:-http://keycloak:8080/realms/hdos}"
       Auth__Audience:              "${AUTH_AUDIENCE:-reporting-platform}"
       ConnectionStrings__Postgres: "Host=postgres;Database=hdos;Username=hdos;Password=hdos"
     extra_hosts:
@@ -225,7 +267,7 @@ services:
       ASPNETCORE_URLS:          http://+:5200
       Redis__ConnectionString:  redis:6379
       RabbitMQ__Uri:            amqp://guest:guest@rabbitmq/
-      Auth__Authority:          "${AUTH_AUTHORITY:-http://${HDOS_HOST:-host.docker.internal}:8180/realms/hdos}"
+      Auth__Authority:          "${AUTH_AUTHORITY:-http://keycloak:8080/realms/hdos}"
       Auth__Audience:           "${AUTH_AUDIENCE:-reporting-platform}"
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -371,17 +413,18 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        VITE_KEYCLOAK_URL:       "http://${HDOS_HOST:-host.docker.internal}:8180"
+        # HTTPS URLs — qua tls-proxy (self-signed cert)
+        VITE_KEYCLOAK_URL:       "https://${HDOS_HOST:-localhost}:8443"
         VITE_KEYCLOAK_REALM:     hdos
         VITE_KEYCLOAK_CLIENT_ID: hdos-web
-        VITE_GATEWAY_URL:        "http://${HDOS_HOST:-host.docker.internal}:5500"
+        VITE_GATEWAY_URL:        "https://${HDOS_HOST:-localhost}"
     ports:
       - "3000:3000"
     depends_on:
       gateway:
         condition: service_healthy
       keycloak:
-        condition: service_started   # frontend là static SPA, không cần keycloak healthy lúc start
+        condition: service_started
     networks:
       - platform
 
@@ -392,6 +435,7 @@ volumes:
   redis_data:
   rabbitmq_data:
   keycloak_data:
+  tls_certs:      # self-signed cert — sinh 1 lần, tái dùng khi restart
 
 networks:
   platform:
