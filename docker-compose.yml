@@ -104,7 +104,9 @@ services:
       - keycloak_data:/opt/keycloak/data
       - ./keycloak/realm-import.json:/opt/keycloak/data/import/realm-import.json:ro
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:9000/health/ready || exit 1"]
+      # Keycloak 25 UBI image có sẵn curl — management port 9000
+      # /health/ready trả về {"status":"UP"} khi ready
+      test: ["CMD-SHELL", "curl -sf http://localhost:9000/health/ready | grep -q UP || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5
