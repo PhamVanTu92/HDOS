@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useAuth } from 'react-oidc-context';
 import {
   signalRClient,
+  registerSignalRTokenProvider,
   type SignalREventMap,
   type SignalREventHandler,
 } from '../api/signalr';
@@ -18,6 +19,11 @@ export function useSignalRConnection() {
 
   useEffect(() => {
     if (!auth.isAuthenticated || connected.current) return;
+
+    // Race condition fix: React chạy effects theo thứ tự children → parents.
+    // useSignalRConnection (child) có thể chạy trước TokenRegistrar (parent trong AuthProvider).
+    // Register token provider ở đây TRƯỚC khi connect để đảm bảo token có sẵn.
+    registerSignalRTokenProvider(() => auth.user?.access_token ?? null);
 
     let cancelled = false;
 
