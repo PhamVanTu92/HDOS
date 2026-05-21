@@ -3,19 +3,20 @@
 # Providers overlay: docker compose -f docker-compose.yml -f docker-compose.providers.yml up -d
 #
 # Port map (host → container):
-#   5500 → gateway          (public entry point)
-#   5000 → request-api      (internal, reachable via gateway only)
-#   5100 → ingestion-api    (internal, reachable via gateway only)
-#   5200 → realtime-hub     (internal, reachable via gateway only)
-#   5400 → provider-bridge  (gRPC — internal)
-#   5433 → postgres         (HDOS main DB)
-#   5434 → postgres-excel   (Excel Provider dedicated DB)
+#   5500 → gateway                (public entry point)
+#   5000 → request-api            (internal, reachable via gateway only)
+#   5100 → ingestion-api          (internal, reachable via gateway only)
+#   5200 → realtime-hub           (internal, reachable via gateway only)
+#   5400 → provider-bridge        (gRPC — internal)
+#   5433 → postgres               (HDOS main DB)
+#   5434 → postgres-excel         (Excel Provider dedicated DB)
 #   6380 → redis
 #   5672 → rabbitmq (AMQP)
 #  15672 → rabbitmq (management UI)
-#   8180 → keycloak         (identity provider UI + OIDC)
-#   3000 → frontend         (React SPA)
-#   5600 → excel-provider   (Data Management API)
+#   8180 → keycloak               (identity provider UI + OIDC)
+#   3000 → frontend               (React SPA — HDOS main)
+#   3001 → excel-provider-ui      (React SPA — Excel Provider standalone)
+#   5600 → excel-provider         (Data Management API)
 #
 # First-time setup:
 #   1. Copy .env.example → .env and fill in HDOS_HOST (your server IP)
@@ -405,7 +406,21 @@ services:
     networks:
       - platform
 
-  # ─── Frontend: React SPA ─────────────────────────────────────────────────────
+  # ─── Frontend: Excel Provider UI (standalone React SPA) ──────────────────────
+
+  excel-provider-ui:
+    build:
+      context: ./excel-provider-frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3001:80"
+    depends_on:
+      excel-provider:
+        condition: service_started  # excel-provider không có healthcheck đủ mạnh
+    networks:
+      - platform
+
+  # ─── Frontend: React SPA (HDOS main) ─────────────────────────────────────────
 
   frontend:
     build:
