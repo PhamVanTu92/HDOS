@@ -1,3 +1,4 @@
+using ReportingPlatform.Contracts.Operations;
 using ReportingPlatform.Metadata.Services;
 using ReportingPlatform.Operations.Dispatcher;
 using ReportingPlatform.Operations.Handlers.Admin;
@@ -29,6 +30,8 @@ public static class OperationsExtensions
             new OperationHandlerRegistry(sp.GetServices<IOperationHandler>()));
         services.AddSingleton<OperationDispatcher>();
         services.AddSingleton<RequestSubmissionService>();
+        services.AddSingleton<INestedRequestSubmitter>(sp =>
+            sp.GetRequiredService<RequestSubmissionService>());
 
         // Shared services
         services.AddSingleton<FilterOptionsService>();

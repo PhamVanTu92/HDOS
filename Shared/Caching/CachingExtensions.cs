@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Configuration;
+using ReportingPlatform.Contracts.Store;
 
 namespace ReportingPlatform.Caching;
 
@@ -18,6 +19,7 @@ public static class CachingExtensions
 
         services.AddSingleton<OwnerStore>();
         services.AddSingleton<ResultStore>();
+        services.AddSingleton<IResultReader>(sp => sp.GetRequiredService<ResultStore>());
         services.AddSingleton<IdempotencyStore>();
         services.AddSingleton<ProgressRingBuffer>();
         services.AddSingleton<SingleFlightCoordinator>();

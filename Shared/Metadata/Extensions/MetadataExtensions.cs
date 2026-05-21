@@ -9,6 +9,7 @@ public static class MetadataExtensions
         services.AddSingleton<IDashboardMetadataRepository, PostgresDashboardMetadataRepository>();
         services.AddSingleton<IDatasourceMetadataRepository, PostgresDatasourceMetadataRepository>();
         services.AddSingleton<ISchemaMetadataRepository, PostgresSchemaMetadataRepository>();
+        services.AddSingleton<IEventSubscriptionRepository, PostgresEventSubscriptionRepository>();
         return services;
     }
 }

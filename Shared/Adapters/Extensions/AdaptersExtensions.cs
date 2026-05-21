@@ -41,6 +41,8 @@ public static class AdaptersExtensions
                 sp.GetRequiredService<ILogger<TimescaleAdapter>>()));
         services.AddSingleton<ExternalProviderAdapter>();
         services.AddSingleton<DatasourceAdapterFactory>();
+        services.AddSingleton<IDatasourceAdapterFactory>(sp =>
+            sp.GetRequiredService<DatasourceAdapterFactory>());
 
         return services;
     }
