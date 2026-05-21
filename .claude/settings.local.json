@@ -49,7 +49,15 @@
       "Bash(Select-Object -ExpandProperty Name)",
       "Bash(grep -v \"^$\")",
       "Bash(docker --version)",
-      "Bash(docker compose *)"
+      "Bash(docker compose *)",
+      "Bash(git commit -m 'fix\\(compose\\): change postgres host port 5432→5433 to avoid conflict with local instance *)",
+      "Bash(git commit -m 'fix\\(docker\\): install curl in aspnet runtime image for healthchecks *)",
+      "Bash(git commit -m 'fix\\(auth\\): persist DataProtection keys to Redis + auto-recover from key ring mismatch *)",
+      "Bash(git commit -m 'fix\\(di\\): wire full platform stack in Router/EventProcessor; remove ops from Hub *)",
+      "Bash(git commit -m 'fix\\(startup\\): lazy Redis connect in event-processor + add Redis env to provider-bridge *)",
+      "Bash(git commit -m 'fix\\(config\\): Redis connection string fallback + RabbitMQ for provider-bridge *)",
+      "Bash(git commit -m 'fix\\(healthcheck\\): provider-bridge use http2-prior-knowledge + fix URL; add start_period *)",
+      "Bash(git commit -m 'fix\\(compose\\): add Postgres connection string + depends_on for provider-bridge *)"
     ]
   }
 }
