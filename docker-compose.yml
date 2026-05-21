@@ -127,29 +127,14 @@ services:
   # Port 8443 : Keycloak OIDC + Admin UI
 
   tls-proxy:
-    image: nginx:alpine
-    entrypoint: >
-      /bin/sh -c "
-        apk add --no-cache openssl 2>/dev/null;
-        mkdir -p /etc/nginx/ssl;
-        if [ ! -f /etc/nginx/ssl/cert.pem ]; then
-          openssl req -x509 -nodes -days 3650 -newkey rsa:2048
-            -keyout /etc/nginx/ssl/key.pem
-            -out    /etc/nginx/ssl/cert.pem
-            -subj   '/CN=${HDOS_HOST:-localhost}' 2>/dev/null;
-        fi;
-        exec nginx -g 'daemon off;'
-      "
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
     volumes:
       - ./nginx/tls-proxy.conf:/etc/nginx/nginx.conf:ro
-      - tls_certs:/etc/nginx/ssl
     ports:
       - "443:443"
       - "8443:8443"
-    depends_on:
-      - frontend
-      - gateway
-      - keycloak
     restart: unless-stopped
     networks:
       - platform
@@ -435,7 +420,6 @@ volumes:
   redis_data:
   rabbitmq_data:
   keycloak_data:
-  tls_certs:      # self-signed cert — sinh 1 lần, tái dùng khi restart
 
 networks:
   platform:
