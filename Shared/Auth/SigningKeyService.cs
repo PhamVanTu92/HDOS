@@ -50,11 +50,41 @@ public sealed class SigningKeyService : ISigningKeyService, IHostedService
             _snapshot = BuildSnapshot(rows);
             _logger.LogInformation("Signing keys reloaded: {Count} keys in JWKS", _snapshot.JwksKeys.Count);
         }
+        catch (CryptographicException ex)
+        {
+            // The stored private key was encrypted with a Data Protection key that no
+            // longer exists in the current key ring (e.g. container was recreated before
+            // DP keys were persisted to Redis).  Purge the stale row and regenerate.
+            _logger.LogWarning(ex,
+                "Signing key decryption failed — Data Protection key ring mismatch. " +
+                "Purging stale signing keys and generating fresh ones.");
+            await PurgeAndRegenerateAsync(ct);
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to reload signing keys");
             throw;
         }
+    }
+
+    /// <summary>
+    /// Deletes all active signing keys that cannot be decrypted with the current
+    /// Data Protection key ring, then generates a new key and reloads the snapshot.
+    /// </summary>
+    private async Task PurgeAndRegenerateAsync(CancellationToken ct)
+    {
+        await using var conn = await _db.OpenConnectionAsync(ct);
+        await using var del  = conn.CreateCommand();
+        del.CommandText = "DELETE FROM signing_keys WHERE status = 'active'";
+        await del.ExecuteNonQueryAsync(ct);
+
+        await EnsureActiveKeyExistsAsync(ct);
+
+        var rows = await LoadRowsAsync(ct);
+        _snapshot = BuildSnapshot(rows);
+        _logger.LogInformation(
+            "Fresh signing key generated after DP key ring mismatch: {Count} keys in JWKS",
+            _snapshot.JwksKeys.Count);
     }
 
     private async Task EnsureActiveKeyExistsAsync(CancellationToken ct)

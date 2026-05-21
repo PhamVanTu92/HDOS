@@ -38,14 +38,14 @@ builder.Services.AddPlatformTelemetry(builder.Configuration, "Request.Api");
 // ── Postgres ──────────────────────────────────────────────────────────────
 builder.Services.AddSingleton(_ => NpgsqlDataSource.Create(pgConnStr));
 
-// ── Data Protection — Redis key ring in production, local FS in dev ───────
-var dpBuilder = builder.Services.AddDataProtection()
-    .SetApplicationName("ReportingPlatform.RequestApi");
-if (builder.Environment.IsProduction())
-{
-    var redisForDp = ConnectionMultiplexer.Connect(redisConn);
-    dpBuilder.PersistKeysToStackExchangeRedis(redisForDp, "DataProtection-Keys");
-}
+// ── Data Protection — always persist to Redis ─────────────────────────────
+// Keys must survive container restarts (ephemeral FS is lost on every restart).
+// Persisting to Redis ensures the same key ring is used across restarts and
+// replicas regardless of ASPNETCORE_ENVIRONMENT.
+var redisForDp = ConnectionMultiplexer.Connect(redisConn);
+builder.Services.AddDataProtection()
+    .SetApplicationName("ReportingPlatform.RequestApi")
+    .PersistKeysToStackExchangeRedis(redisForDp, "DataProtection-Keys");
 
 // ── Metadata repositories (Dashboard, Datasource, Schema) ────────────────
 // Must be registered before AddPlatformOperations() — handlers depend on these.
