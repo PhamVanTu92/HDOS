@@ -85,15 +85,16 @@ builder.Services.AddMassTransit(x =>
     {
         cfg.Host(new Uri(rabbitUri));
 
-        cfg.Message<IngestEventEnvelope>(m =>
-            m.SetEntityName("events.raw"));
+        // NOTE: Do NOT call cfg.Message<IngestEventEnvelope>(m => m.SetEntityName("events.raw"))
+        // here — that would declare events.raw as a fanout exchange (MassTransit default),
+        // conflicting with the explicit topic exchange declared in ep.Bind below.
 
         cfg.ReceiveEndpoint("event-processor", ep =>
         {
             ep.PrefetchCount = 20;
             ep.Durable       = true;
 
-            // Bind to events.raw topic with wildcard — consume all tenant events.
+            // Bind directly to the events.raw topic exchange (declared by Ingestion.Api).
             ep.Bind("events.raw", b =>
             {
                 b.ExchangeType = "topic";
