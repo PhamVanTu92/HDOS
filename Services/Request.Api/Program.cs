@@ -89,8 +89,9 @@ builder.Services.AddHostedService<WidgetCacheInvalidationSubscriber>();
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(o =>
     {
-        o.Authority = jwtAuth;
-        o.Audience  = jwtAud;
+        o.Authority                = jwtAuth;
+        o.Audience                 = jwtAud;
+        o.RequireHttpsMetadata     = false;   // Keycloak chạy HTTP trong Docker
         o.Events    = new JwtBearerEvents
         {
             OnMessageReceived = ctx =>
