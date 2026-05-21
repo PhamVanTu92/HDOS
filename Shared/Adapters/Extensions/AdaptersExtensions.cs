@@ -40,7 +40,16 @@ public static class AdaptersExtensions
                 dataSource,
                 sp.GetRequiredService<ILogger<TimescaleAdapter>>()));
         services.AddSingleton<ExternalProviderAdapter>();
-        services.AddSingleton<DatasourceAdapterFactory>();
+
+        // DatasourceAdapterFactory has an internal constructor (its parameter types are
+        // internal). DI reflection requires a public constructor, so we use an explicit
+        // factory lambda which has access to internal types within this assembly.
+        services.AddSingleton<DatasourceAdapterFactory>(sp =>
+            new DatasourceAdapterFactory(
+                sp.GetRequiredService<SqlQueryBuilderAdapter>(),
+                sp.GetRequiredService<SqlRawAdapter>(),
+                sp.GetRequiredService<TimescaleAdapter>(),
+                sp.GetRequiredService<ExternalProviderAdapter>()));
         services.AddSingleton<IDatasourceAdapterFactory>(sp =>
             sp.GetRequiredService<DatasourceAdapterFactory>());
 

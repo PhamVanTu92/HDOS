@@ -13,8 +13,8 @@ public sealed class DatasourceAdapterFactory : IDatasourceAdapterFactory
     private readonly TimescaleAdapter       _timescale;
     private readonly ExternalProviderAdapter _externalProvider;
 
-    // Internal constructor: types are internal to Adapters assembly.
-    // DI resolves via reflection so visibility is not required.
+    // Internal constructor: parameter types are internal to this assembly.
+    // Registration must use an explicit factory lambda (see AdaptersExtensions).
     internal DatasourceAdapterFactory(
         SqlQueryBuilderAdapter   queryBuilder,
         SqlRawAdapter            raw,

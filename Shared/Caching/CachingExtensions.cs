@@ -17,6 +17,9 @@ public static class CachingExtensions
         services.AddSingleton<IDatabase>(sp =>
             sp.GetRequiredService<IConnectionMultiplexer>().GetDatabase());
 
+        services.AddSingleton<ISubscriber>(sp =>
+            sp.GetRequiredService<IConnectionMultiplexer>().GetSubscriber());
+
         services.AddSingleton<OwnerStore>();
         services.AddSingleton<ResultStore>();
         services.AddSingleton<IResultReader>(sp => sp.GetRequiredService<ResultStore>());
