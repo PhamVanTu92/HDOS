@@ -34,11 +34,14 @@ export class ApiError extends Error {
 
 async function handleResponse<T>(res: Response): Promise<T> {
   if (!res.ok) {
+    // Đọc body dưới dạng text trước, tránh "body stream already read"
+    // khi gọi res.json() rồi lại gọi res.text() trong catch
     let body: unknown;
     try {
-      body = await res.json();
+      const text = await res.text();
+      body = text ? JSON.parse(text) : null;
     } catch {
-      body = await res.text();
+      body = null;
     }
     throw new ApiError(
       res.status,
