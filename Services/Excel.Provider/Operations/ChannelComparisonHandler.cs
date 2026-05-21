@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
-using ReportingPlatform.ExcelProvider.Excel;
+using ReportingPlatform.ExcelProvider.Database;
 using ReportingPlatform.Provider.V1;
 
 namespace ReportingPlatform.ExcelProvider.Operations;
@@ -12,14 +12,14 @@ namespace ReportingPlatform.ExcelProvider.Operations;
 /// </summary>
 public sealed class ChannelComparisonHandler : IOperationHandler
 {
-    private readonly ExcelDataLoader _loader;
+    private readonly ExcelProviderDb _db;
     private readonly ILogger<ChannelComparisonHandler> _logger;
 
     public string OperationPattern => "report.channel.comparison";
 
-    public ChannelComparisonHandler(ExcelDataLoader loader, ILogger<ChannelComparisonHandler> logger)
+    public ChannelComparisonHandler(ExcelProviderDb db, ILogger<ChannelComparisonHandler> logger)
     {
-        _loader = loader;
+        _db     = db;
         _logger = logger;
     }
 
@@ -31,54 +31,47 @@ public sealed class ChannelComparisonHandler : IOperationHandler
         var sw = Stopwatch.StartNew();
         _logger.LogInformation("ChannelComparison starting — requestId={RequestId}", request.RequestId);
 
-        await reportProgress(10, "Loading Excel data…");
-        var data = await _loader.GetDataAsync(ct);
+        await reportProgress(10, "Parsing parameters…");
 
-        await reportProgress(25, "Parsing parameters…");
+        using var doc = JsonDocument.Parse(request.ParamsJson ?? "{}");
+        var root      = doc.RootElement;
+        var fromDate  = DateOnly.Parse(root.GetProperty("fromDate").GetString()!);
+        var toDate    = DateOnly.Parse(root.GetProperty("toDate").GetString()!);
 
-        using var doc  = JsonDocument.Parse(request.ParamsJson ?? "{}");
-        var root       = doc.RootElement;
-        var fromDate   = DateOnly.Parse(root.GetProperty("fromDate").GetString()!);
-        var toDate     = DateOnly.Parse(root.GetProperty("toDate").GetString()!);
+        _logger.LogInformation("ChannelComparison from={From} to={To}", fromDate, toDate);
 
-        _logger.LogInformation(
-            "ChannelComparison from={From} to={To}", fromDate, toDate);
+        await reportProgress(30, $"Querying sales from {fromDate} to {toDate}…");
+        var rows = await _db.GetSalesByDateRangeAsync(fromDate, toDate, ct);
 
-        await reportProgress(40, $"Filtering rows from {fromDate} to {toDate}…");
-
-        var filtered = data.Sales
-            .Where(r => r.Date >= fromDate && r.Date <= toDate)
-            .ToList();
+        await reportProgress(50, "Aggregating channel totals…");
 
         // ── Aggregation ────────────────────────────────────────────────────────
 
-        decimal onlineRevenue = filtered.Where(r => r.Channel == "Online").Sum(r => r.Revenue);
-        int     onlineUnits   = filtered.Where(r => r.Channel == "Online").Sum(r => r.Units);
-        decimal storeRevenue  = filtered.Where(r => r.Channel == "Store").Sum(r => r.Revenue);
-        int     storeUnits    = filtered.Where(r => r.Channel == "Store").Sum(r => r.Units);
+        decimal onlineRevenue = rows.Where(r => r.Channel == "Online").Sum(r => r.Revenue);
+        int     onlineUnits   = rows.Where(r => r.Channel == "Online").Sum(r => r.Units);
+        decimal storeRevenue  = rows.Where(r => r.Channel == "Store").Sum(r => r.Revenue);
+        int     storeUnits    = rows.Where(r => r.Channel == "Store").Sum(r => r.Units);
 
         decimal totalRevenue = onlineRevenue + storeRevenue;
         double  onlinePct    = totalRevenue == 0 ? 0 : Math.Round((double)(onlineRevenue / totalRevenue * 100), 1);
         double  storePct     = totalRevenue == 0 ? 0 : Math.Round((double)(storeRevenue  / totalRevenue * 100), 1);
 
-        await reportProgress(50, "Aggregation complete, building trend series…");
+        await reportProgress(65, "Building daily trend series…");
 
         // ── Daily trend ────────────────────────────────────────────────────────
 
-        // Build a sorted list of every date in the range
         var labels       = new List<string>();
         var onlineSeries = new List<decimal>();
         var storeSeries  = new List<decimal>();
 
         // Pre-index revenue by (date, channel) for O(n) lookup
-        var byDateChannel = filtered
+        var byDateChannel = rows
             .GroupBy(r => (r.Date, r.Channel))
             .ToDictionary(g => g.Key, g => g.Sum(r => r.Revenue));
 
         for (var d = fromDate; d <= toDate; d = d.AddDays(1))
         {
-            var label = d.ToString("yyyy-MM-dd");
-            labels.Add(label);
+            labels.Add(d.ToString("yyyy-MM-dd"));
 
             byDateChannel.TryGetValue((d, "Online"), out var oRev);
             byDateChannel.TryGetValue((d, "Store"),  out var sRev);
@@ -86,7 +79,7 @@ public sealed class ChannelComparisonHandler : IOperationHandler
             storeSeries.Add(Math.Round(sRev, 2));
         }
 
-        await reportProgress(80, "Building response…");
+        await reportProgress(90, "Building response…");
 
         var result = new
         {
@@ -113,7 +106,7 @@ public sealed class ChannelComparisonHandler : IOperationHandler
         sw.Stop();
         _logger.LogInformation(
             "ChannelComparison complete — elapsed={Elapsed}ms, rows={Rows}",
-            sw.ElapsedMilliseconds, filtered.Count);
+            sw.ElapsedMilliseconds, rows.Count);
 
         return JsonSerializer.Serialize(result);
     }

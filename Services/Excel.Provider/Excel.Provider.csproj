@@ -13,8 +13,6 @@
     <PackageReference Include="Grpc.Net.Client"   Version="2.65.0" />
     <PackageReference Include="Google.Protobuf"   Version="3.29.3" />
     <PackageReference Include="Grpc.Tools"        Version="2.65.0" PrivateAssets="All" />
-    <PackageReference Include="EPPlus"            Version="7.5.2" />
-    <PackageReference Include="BCrypt.Net-Next"   Version="4.0.3" />
     <PackageReference Include="Npgsql"            Version="9.0.3" />
   </ItemGroup>
 

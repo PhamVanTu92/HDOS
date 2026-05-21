@@ -113,7 +113,7 @@ interface SaleModalProps {
   products: ProductRecord[];
   initialData?: SaleRecord | null;
   onClose: () => void;
-  onSubmit: (data: Omit<SaleRecord, 'rowIndex'>) => void;
+  onSubmit: (data: Omit<SaleRecord, 'id'>) => void;
   isLoading: boolean;
 }
 
@@ -162,13 +162,13 @@ function SaleModal({ products, initialData, onClose, onSubmit, isLoading }: Sale
     e.preventDefault();
     if (!validate()) return;
     onSubmit({
-      date: form.date,
-      region: REGION_API_VALUES[form.region] ?? form.region,
-      product: form.product,
+      date:     form.date,
+      region:   REGION_API_VALUES[form.region] ?? form.region,
+      product:  form.product,
       category: form.category,
-      revenue: Number(form.revenue),
-      units: Number(form.units),
-      channel: form.channel,
+      revenue:  Number(form.revenue),
+      units:    Number(form.units),
+      channel:  form.channel,
     });
   };
 
@@ -361,7 +361,7 @@ function SalesTab({
   const [filterRegion, setFilterRegion] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editRecord, setEditRecord] = useState<SaleRecord | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<number | null>(null); // stores sale.id
 
   const { data: sales = [], isLoading } = useQuery({
     queryKey: ['sales', filterDate, filterRegion],
@@ -373,7 +373,7 @@ function SalesTab({
   });
 
   const addMutation = useMutation({
-    mutationFn: (data: Omit<SaleRecord, 'rowIndex'>) => addSale(data),
+    mutationFn: (data: Omit<SaleRecord, 'id'>) => addSale(data),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['sales'] });
       setShowModal(false);
@@ -383,8 +383,8 @@ function SalesTab({
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ rowIndex, data }: { rowIndex: number; data: Partial<SaleRecord> }) =>
-      updateSale(rowIndex, data),
+    mutationFn: ({ id, data }: { id: number; data: Partial<Omit<SaleRecord, 'id'>> }) =>
+      updateSale(id, data),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['sales'] });
       setEditRecord(null);
@@ -395,7 +395,7 @@ function SalesTab({
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (rowIndex: number) => deleteSale(rowIndex),
+    mutationFn: (id: number) => deleteSale(id),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['sales'] });
       setDeleteTarget(null);
@@ -404,9 +404,9 @@ function SalesTab({
     onError: (err: Error) => addToast(`Lỗi: ${err.message}`, 'error'),
   });
 
-  const handleSaleSubmit = (data: Omit<SaleRecord, 'rowIndex'>) => {
+  const handleSaleSubmit = (data: Omit<SaleRecord, 'id'>) => {
     if (editRecord) {
-      updateMutation.mutate({ rowIndex: editRecord.rowIndex, data });
+      updateMutation.mutate({ id: editRecord.id, data });
     } else {
       addMutation.mutate(data);
     }
@@ -490,7 +490,7 @@ function SalesTab({
               </tr>
             ) : (
               sales.map((sale) => (
-                <tr key={sale.rowIndex} className="border-t border-gray-100 hover:bg-gray-50">
+                <tr key={sale.id} className="border-t border-gray-100 hover:bg-gray-50">
                   <td className="px-4 py-3 text-gray-700">{sale.date}</td>
                   <td className="px-4 py-3 text-gray-600">
                     {REGION_DISPLAY[sale.region] ?? sale.region}
@@ -521,7 +521,7 @@ function SalesTab({
                         Sửa
                       </button>
                       <button
-                        onClick={() => setDeleteTarget(sale.rowIndex)}
+                        onClick={() => setDeleteTarget(sale.id)}
                         className="rounded px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50"
                       >
                         Xoá

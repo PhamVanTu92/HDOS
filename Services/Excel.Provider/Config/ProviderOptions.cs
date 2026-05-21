@@ -30,7 +30,7 @@ public sealed class ProviderOptions
     /// <summary>Client ID used for platform token endpoint (client_credentials grant).</summary>
     public string ClientId { get; set; } = "excel-provider";
 
-    /// <summary>Client secret (plain-text; BCrypt-hashed when seeding DB).</summary>
+    /// <summary>Client secret (plain-text; hashed when stored in provider_registry).</summary>
     public string ClientSecret { get; set; } = string.Empty;
 
     /// <summary>URL of the platform token endpoint, e.g. http://request-api:5000/api/v1/providers/token</summary>
@@ -44,18 +44,4 @@ public sealed class ProviderOptions
 
     /// <summary>Semver of this provider.</summary>
     public string Version { get; set; } = "1.0.0";
-}
-
-/// <summary>
-/// Configuration options bound from the "Excel" section of appsettings.json.
-/// </summary>
-public sealed class ExcelOptions
-{
-    public const string SectionName = "Excel";
-
-    /// <summary>Directory containing SalesData.xlsx (and where it is generated if missing).</summary>
-    public string DataPath { get; set; } = "./ExcelData";
-
-    /// <summary>How long (in minutes) the in-memory Excel cache remains valid before reload.</summary>
-    public int CacheMinutes { get; set; } = 5;
 }

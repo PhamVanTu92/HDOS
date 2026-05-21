@@ -1,16 +1,13 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Npgsql;
 using ReportingPlatform.ExcelProvider.Config;
 using ReportingPlatform.ExcelProvider.Database;
-using ReportingPlatform.ExcelProvider.Excel;
 using ReportingPlatform.ExcelProvider.Grpc;
 using ReportingPlatform.ExcelProvider.Management;
 using ReportingPlatform.ExcelProvider.Operations;
 using ReportingPlatform.ExcelProvider.Services;
-
-// ── EPPlus non-commercial licence must be set before any EPPlus call ──────────
-OfficeOpenXml.ExcelPackage.LicenseContext = OfficeOpenXml.LicenseContext.NonCommercial;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -23,8 +20,14 @@ var config = builder.Configuration;
 
 // ── Options ───────────────────────────────────────────────────────────────────
 builder.Services.Configure<ProviderOptions>(config.GetSection(ProviderOptions.SectionName));
-builder.Services.Configure<ExcelOptions>(config.GetSection(ExcelOptions.SectionName));
 builder.Services.Configure<IngestionOptions>(config.GetSection(IngestionOptions.Section));
+
+// ── Database (postgres-excel) ─────────────────────────────────────────────────
+var excelDbConnStr = config.GetConnectionString("ExcelDb")
+    ?? "Host=localhost;Port=5434;Database=excel_provider;Username=excel;Password=excel";
+
+builder.Services.AddSingleton(_ => NpgsqlDataSource.Create(excelDbConnStr));
+builder.Services.AddSingleton<ExcelProviderDb>();
 
 // ── HttpClients ───────────────────────────────────────────────────────────────
 builder.Services.AddHttpClient<TokenService>(client =>
@@ -37,10 +40,6 @@ builder.Services.AddHttpClient("ingestion", client =>
 {
     client.Timeout = TimeSpan.FromSeconds(10);
 });
-
-// ── Excel ─────────────────────────────────────────────────────────────────────
-builder.Services.AddSingleton<SampleDataGenerator>();
-builder.Services.AddSingleton<ExcelDataLoader>();
 
 // ── Operation handlers ────────────────────────────────────────────────────────
 builder.Services.AddSingleton<IOperationHandler, DashboardSummaryHandler>();
@@ -69,38 +68,17 @@ var app = builder.Build();
 // ── Startup tasks ─────────────────────────────────────────────────────────────
 
 var logger       = app.Services.GetRequiredService<ILogger<Program>>();
-var excelOpts    = app.Services.GetRequiredService<IOptions<ExcelOptions>>().Value;
 var providerOpts = app.Services.GetRequiredService<IOptions<ProviderOptions>>().Value;
 
-// 1. Generate sample Excel data if file does not exist
-var generator     = app.Services.GetRequiredService<SampleDataGenerator>();
-var excelFilePath = Path.Combine(excelOpts.DataPath, "SalesData.xlsx");
+// Initialize postgres-excel database (create tables + seed if empty)
+var db = app.Services.GetRequiredService<ExcelProviderDb>();
 try
 {
-    generator.GenerateIfMissing(excelFilePath);
+    await db.InitializeAsync();
 }
 catch (Exception ex)
 {
-    logger.LogWarning(ex, "Failed to generate sample Excel data — continuing anyway");
-}
-
-// 2. Auto-seed provider and operations in platform DB
-var pgConnStr = config.GetConnectionString("Postgres")
-    ?? "Host=localhost;Database=hdos;Username=hdos;Password=hdos";
-
-var seeder = new ProviderSeeder(
-    pgConnStr,
-    app.Services.GetRequiredService<IOptions<ProviderOptions>>(),
-    app.Services.GetRequiredService<ILogger<ProviderSeeder>>());
-
-try
-{
-    await seeder.SeedAsync();
-}
-catch (Exception ex)
-{
-    // Non-fatal — provider may already be registered, or DB may be unavailable in dev
-    logger.LogWarning(ex, "DB seed failed — continuing without seeding. Provider must be registered manually.");
+    logger.LogWarning(ex, "DB initialization failed — continuing; service will retry on next query");
 }
 
 logger.LogInformation(

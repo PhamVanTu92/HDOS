@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
-using ReportingPlatform.ExcelProvider.Excel;
+using ReportingPlatform.ExcelProvider.Database;
 using ReportingPlatform.Provider.V1;
 
 namespace ReportingPlatform.ExcelProvider.Operations;
@@ -12,14 +12,14 @@ namespace ReportingPlatform.ExcelProvider.Operations;
 /// </summary>
 public sealed class ProductDetailHandler : IOperationHandler
 {
-    private readonly ExcelDataLoader _loader;
+    private readonly ExcelProviderDb _db;
     private readonly ILogger<ProductDetailHandler> _logger;
 
     public string OperationPattern => "report.product.detail";
 
-    public ProductDetailHandler(ExcelDataLoader loader, ILogger<ProductDetailHandler> logger)
+    public ProductDetailHandler(ExcelProviderDb db, ILogger<ProductDetailHandler> logger)
     {
-        _loader = loader;
+        _db     = db;
         _logger = logger;
     }
 
@@ -31,13 +31,10 @@ public sealed class ProductDetailHandler : IOperationHandler
         var sw = Stopwatch.StartNew();
         _logger.LogInformation("ProductDetail starting — requestId={RequestId}", request.RequestId);
 
-        await reportProgress(10, "Loading Excel data…");
-        var data = await _loader.GetDataAsync(ct);
+        await reportProgress(10, "Parsing parameters…");
 
-        await reportProgress(30, "Parsing parameters…");
-
-        using var doc  = JsonDocument.Parse(request.ParamsJson ?? "{}");
-        var root       = doc.RootElement;
+        using var doc   = JsonDocument.Parse(request.ParamsJson ?? "{}");
+        var root        = doc.RootElement;
         var productName = root.GetProperty("productName").GetString()!;
         var fromDate    = DateOnly.Parse(root.GetProperty("fromDate").GetString()!);
         var toDate      = DateOnly.Parse(root.GetProperty("toDate").GetString()!);
@@ -45,27 +42,26 @@ public sealed class ProductDetailHandler : IOperationHandler
         _logger.LogInformation(
             "ProductDetail product={Product} from={From} to={To}", productName, fromDate, toDate);
 
-        await reportProgress(50, $"Filtering rows for '{productName}'…");
+        await reportProgress(30, $"Querying sales for '{productName}'…");
+        var allRows = await _db.GetSalesByDateRangeAsync(fromDate, toDate, ct);
 
-        // Case-insensitive product match + date range filter
-        var filtered = data.Sales
-            .Where(r => r.Date >= fromDate
-                     && r.Date <= toDate
-                     && string.Equals(r.Product, productName, StringComparison.OrdinalIgnoreCase))
+        // Case-insensitive product filter (done in-process to avoid extra parameterized query complexity)
+        var rows = allRows
+            .Where(r => string.Equals(r.Product, productName, StringComparison.OrdinalIgnoreCase))
             .ToList();
 
-        await reportProgress(70, "Aggregating metrics…");
+        await reportProgress(60, "Aggregating metrics…");
 
         // ── Totals ─────────────────────────────────────────────────────────────
 
-        decimal totalRevenue     = filtered.Sum(r => r.Revenue);
-        int     totalUnits       = filtered.Sum(r => r.Units);
-        int     dayCount         = (int)(toDate.DayNumber - fromDate.DayNumber) + 1;
-        decimal avgDailyRevenue  = dayCount > 0 ? Math.Round(totalRevenue / dayCount, 2) : 0m;
+        decimal totalRevenue    = rows.Sum(r => r.Revenue);
+        int     totalUnits      = rows.Sum(r => r.Units);
+        int     dayCount        = (int)(toDate.DayNumber - fromDate.DayNumber) + 1;
+        decimal avgDailyRevenue = dayCount > 0 ? Math.Round(totalRevenue / dayCount, 2) : 0m;
 
         // ── By region ─────────────────────────────────────────────────────────
 
-        var byRegion = filtered
+        var byRegion = rows
             .GroupBy(r => r.Region)
             .Select(g => new
             {
@@ -78,8 +74,7 @@ public sealed class ProductDetailHandler : IOperationHandler
 
         // ── Daily trend ────────────────────────────────────────────────────────
 
-        // Pre-index by date
-        var byDate = filtered
+        var byDate = rows
             .GroupBy(r => r.Date)
             .ToDictionary(g => g.Key, g => (Revenue: g.Sum(r => r.Revenue), Units: g.Sum(r => r.Units)));
 
@@ -103,9 +98,11 @@ public sealed class ProductDetailHandler : IOperationHandler
             }
         }
 
+        await reportProgress(90, "Building response…");
+
         var result = new
         {
-            productName     = productName,
+            productName,
             totalRevenue    = Math.Round(totalRevenue, 2),
             totalUnits,
             avgDailyRevenue,
@@ -121,7 +118,7 @@ public sealed class ProductDetailHandler : IOperationHandler
         sw.Stop();
         _logger.LogInformation(
             "ProductDetail complete — elapsed={Elapsed}ms, rows={Rows}",
-            sw.ElapsedMilliseconds, filtered.Count);
+            sw.ElapsedMilliseconds, rows.Count);
 
         return JsonSerializer.Serialize(result);
     }

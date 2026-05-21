@@ -1,7 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
-using ReportingPlatform.ExcelProvider.Excel;
+using ReportingPlatform.ExcelProvider.Database;
 using ReportingPlatform.Provider.V1;
 
 namespace ReportingPlatform.ExcelProvider.Operations;
@@ -12,14 +12,14 @@ namespace ReportingPlatform.ExcelProvider.Operations;
 /// </summary>
 public sealed class SalesTrendHandler : IOperationHandler
 {
-    private readonly ExcelDataLoader _loader;
+    private readonly ExcelProviderDb _db;
     private readonly ILogger<SalesTrendHandler> _logger;
 
     public string OperationPattern => "report.sales.trend";
 
-    public SalesTrendHandler(ExcelDataLoader loader, ILogger<SalesTrendHandler> logger)
+    public SalesTrendHandler(ExcelProviderDb db, ILogger<SalesTrendHandler> logger)
     {
-        _loader = loader;
+        _db     = db;
         _logger = logger;
     }
 
@@ -28,32 +28,26 @@ public sealed class SalesTrendHandler : IOperationHandler
         Func<int, string, Task> reportProgress,
         CancellationToken ct)
     {
-        await reportProgress(10, "Loading Excel data…");
-        var data = await _loader.GetDataAsync(ct);
+        await reportProgress(10, "Parsing parameters…");
 
-        await reportProgress(30, "Parsing parameters…");
-
-        using var doc      = JsonDocument.Parse(request.ParamsJson ?? "{}");
-        var root           = doc.RootElement;
-        var fromDate       = DateOnly.Parse(root.GetProperty("fromDate").GetString()!);
-        var toDate         = DateOnly.Parse(root.GetProperty("toDate").GetString()!);
-        var groupBy        = root.GetProperty("groupBy").GetString() ?? "day";
+        using var doc = JsonDocument.Parse(request.ParamsJson ?? "{}");
+        var root      = doc.RootElement;
+        var fromDate  = DateOnly.Parse(root.GetProperty("fromDate").GetString()!);
+        var toDate    = DateOnly.Parse(root.GetProperty("toDate").GetString()!);
+        var groupBy   = root.GetProperty("groupBy").GetString() ?? "day";
 
         _logger.LogInformation("SalesTrend from={From} to={To} groupBy={Group}", fromDate, toDate, groupBy);
 
-        await reportProgress(50, $"Filtering rows from {fromDate} to {toDate}…");
-
-        var filtered = data.Sales
-            .Where(r => r.Date >= fromDate && r.Date <= toDate)
-            .ToList();
+        await reportProgress(30, $"Querying sales from {fromDate} to {toDate}…");
+        var rows = await _db.GetSalesByDateRangeAsync(fromDate, toDate, ct);
 
         await reportProgress(70, $"Grouping by {groupBy}…");
 
         var grouped = groupBy switch
         {
-            "week"  => GroupByWeek(filtered),
-            "month" => GroupByMonth(filtered),
-            _       => GroupByDay(filtered, fromDate, toDate),
+            "week"  => GroupByWeek(rows),
+            "month" => GroupByMonth(rows),
+            _       => GroupByDay(rows, fromDate, toDate),
         };
 
         await reportProgress(90, "Building response…");
@@ -74,7 +68,7 @@ public sealed class SalesTrendHandler : IOperationHandler
     // ─── Grouping helpers ─────────────────────────────────────────────────────
 
     private static SortedDictionary<string, (decimal Revenue, int Units)> GroupByDay(
-        List<SalesRow> rows, DateOnly from, DateOnly to)
+        List<SaleRow> rows, DateOnly from, DateOnly to)
     {
         var dict = new SortedDictionary<string, (decimal, int)>();
 
@@ -93,7 +87,7 @@ public sealed class SalesTrendHandler : IOperationHandler
     }
 
     private static SortedDictionary<string, (decimal Revenue, int Units)> GroupByWeek(
-        List<SalesRow> rows)
+        List<SaleRow> rows)
     {
         var dict = new SortedDictionary<string, (decimal, int)>();
 
@@ -109,7 +103,7 @@ public sealed class SalesTrendHandler : IOperationHandler
     }
 
     private static SortedDictionary<string, (decimal Revenue, int Units)> GroupByMonth(
-        List<SalesRow> rows)
+        List<SaleRow> rows)
     {
         var dict = new SortedDictionary<string, (decimal, int)>();
 

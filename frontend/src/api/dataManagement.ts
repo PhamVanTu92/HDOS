@@ -5,7 +5,7 @@ const DATA_API =
 // ─── Interfaces ───────────────────────────────────────────────────────────────
 
 export interface SaleRecord {
-  rowIndex: number;
+  id: number;          // DB primary key (long / bigint)
   date: string;
   region: string;
   product: string;
@@ -84,20 +84,20 @@ export async function getSales(params?: {
 }
 
 export async function addSale(
-  data: Omit<SaleRecord, 'rowIndex'>,
+  data: Omit<SaleRecord, 'id'>,
 ): Promise<SaleRecord> {
-  return dataPost<Omit<SaleRecord, 'rowIndex'>, SaleRecord>('/api/sales', data);
+  return dataPost<Omit<SaleRecord, 'id'>, SaleRecord>('/api/sales', data);
 }
 
 export async function updateSale(
-  rowIndex: number,
-  data: Partial<SaleRecord>,
+  id: number,
+  data: Partial<Omit<SaleRecord, 'id'>>,
 ): Promise<SaleRecord> {
-  return dataPut<Partial<SaleRecord>, SaleRecord>(`/api/sales/${rowIndex}`, data);
+  return dataPut<Partial<Omit<SaleRecord, 'id'>>, SaleRecord>(`/api/sales/${id}`, data);
 }
 
-export async function deleteSale(rowIndex: number): Promise<void> {
-  return dataDelete(`/api/sales/${rowIndex}`);
+export async function deleteSale(id: number): Promise<void> {
+  return dataDelete(`/api/sales/${id}`);
 }
 
 // ─── Products API ─────────────────────────────────────────────────────────────
@@ -110,8 +110,9 @@ export async function updateProductStock(
   productId: string,
   stock: number,
 ): Promise<ProductRecord> {
-  return dataPut<{ currentStock: number }, ProductRecord>(
+  // Controller accepts: { "stock": <number> }
+  return dataPut<{ stock: number }, ProductRecord>(
     `/api/products/${encodeURIComponent(productId)}/stock`,
-    { currentStock: stock },
+    { stock },
   );
 }

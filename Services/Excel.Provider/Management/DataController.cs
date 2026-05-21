@@ -15,12 +15,12 @@ public sealed class UpdateStockBody
 // ─── Controller ───────────────────────────────────────────────────────────────
 
 /// <summary>
-/// HTTP management API for reading and mutating Excel data at runtime.
+/// HTTP management API for reading and mutating sales/product data at runtime.
 /// After each successful mutation, a WidgetStale notification is sent to the
 /// Ingestion API via <see cref="NotificationService"/>.
 /// </summary>
 [ApiController]
-[Route("api/data")]
+[Route("api")]
 public sealed class DataController : ControllerBase
 {
     private readonly DataManagementService _mgmt;
@@ -74,6 +74,7 @@ public sealed class DataController : ControllerBase
             return CreatedAtAction(nameof(GetSales), new { }, record);
         }
         catch (ArgumentOutOfRangeException ex) { return BadRequest(new { error = ex.Message }); }
+        catch (ArgumentException ex)            { return BadRequest(new { error = ex.Message }); }
         catch (Exception ex)
         {
             _logger.LogError(ex, "AddSale failed");
@@ -81,10 +82,10 @@ public sealed class DataController : ControllerBase
         }
     }
 
-    /// <summary>PUT /api/data/sales/{rowIndex}</summary>
-    [HttpPut("sales/{rowIndex:int}")]
+    /// <summary>PUT /api/data/sales/{id}</summary>
+    [HttpPut("sales/{id:long}")]
     public async Task<IActionResult> UpdateSale(
-        int                        rowIndex,
+        long                       id,
         [FromBody] UpdateSaleRequest req,
         CancellationToken           ct)
     {
@@ -92,39 +93,33 @@ public sealed class DataController : ControllerBase
 
         try
         {
-            var record = await _mgmt.UpdateSaleAsync(rowIndex, req, ct);
+            var record = await _mgmt.UpdateSaleAsync(id, req, ct);
             _ = _notify.NotifyDataChangedAsync(DataManagementService.SalesOperations, CancellationToken.None);
             return Ok(record);
         }
-        catch (ArgumentOutOfRangeException ex) when (ex.ParamName == "physRow")
-        {
-            return NotFound(new { error = $"Row {rowIndex} not found." });
-        }
-        catch (ArgumentOutOfRangeException ex) { return BadRequest(new { error = ex.Message }); }
+        catch (KeyNotFoundException ex)         { return NotFound(new { error = ex.Message }); }
+        catch (ArgumentOutOfRangeException ex)  { return BadRequest(new { error = ex.Message }); }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "UpdateSale rowIndex={RowIndex} failed", rowIndex);
+            _logger.LogError(ex, "UpdateSale id={Id} failed", id);
             return StatusCode(500, new { error = ex.Message });
         }
     }
 
-    /// <summary>DELETE /api/data/sales/{rowIndex}</summary>
-    [HttpDelete("sales/{rowIndex:int}")]
-    public async Task<IActionResult> DeleteSale(int rowIndex, CancellationToken ct)
+    /// <summary>DELETE /api/data/sales/{id}</summary>
+    [HttpDelete("sales/{id:long}")]
+    public async Task<IActionResult> DeleteSale(long id, CancellationToken ct)
     {
         try
         {
-            await _mgmt.DeleteSaleAsync(rowIndex, ct);
+            await _mgmt.DeleteSaleAsync(id, ct);
             _ = _notify.NotifyDataChangedAsync(DataManagementService.SalesOperations, CancellationToken.None);
             return NoContent();
         }
-        catch (ArgumentOutOfRangeException ex) when (ex.ParamName == "physRow")
-        {
-            return NotFound(new { error = $"Row {rowIndex} not found." });
-        }
+        catch (KeyNotFoundException ex) { return NotFound(new { error = ex.Message }); }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "DeleteSale rowIndex={RowIndex} failed", rowIndex);
+            _logger.LogError(ex, "DeleteSale id={Id} failed", id);
             return StatusCode(500, new { error = ex.Message });
         }
     }

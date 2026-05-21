@@ -1,6 +1,6 @@
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
-using ReportingPlatform.ExcelProvider.Excel;
+using ReportingPlatform.ExcelProvider.Database;
 using ReportingPlatform.Provider.V1;
 
 namespace ReportingPlatform.ExcelProvider.Operations;
@@ -11,14 +11,14 @@ namespace ReportingPlatform.ExcelProvider.Operations;
 /// </summary>
 public sealed class RegionalPerformanceHandler : IOperationHandler
 {
-    private readonly ExcelDataLoader _loader;
+    private readonly ExcelProviderDb _db;
     private readonly ILogger<RegionalPerformanceHandler> _logger;
 
     public string OperationPattern => "report.regional.performance";
 
-    public RegionalPerformanceHandler(ExcelDataLoader loader, ILogger<RegionalPerformanceHandler> logger)
+    public RegionalPerformanceHandler(ExcelProviderDb db, ILogger<RegionalPerformanceHandler> logger)
     {
-        _loader = loader;
+        _db     = db;
         _logger = logger;
     }
 
@@ -27,10 +27,7 @@ public sealed class RegionalPerformanceHandler : IOperationHandler
         Func<int, string, Task> reportProgress,
         CancellationToken ct)
     {
-        await reportProgress(10, "Loading Excel data…");
-        var data = await _loader.GetDataAsync(ct);
-
-        await reportProgress(30, "Parsing parameters…");
+        await reportProgress(10, "Parsing parameters…");
 
         using var doc = JsonDocument.Parse(request.ParamsJson ?? """{"period":"today"}""");
         var period    = doc.RootElement.GetProperty("period").GetString() ?? "today";
@@ -45,29 +42,29 @@ public sealed class RegionalPerformanceHandler : IOperationHandler
             _       => (today, today), // "today"
         };
 
-        await reportProgress(50, $"Filtering rows for period {range.From} – {range.To}…");
+        await reportProgress(30, $"Querying sales for period {range.From} – {range.To}…");
+        var sales   = await _db.GetSalesByDateRangeAsync(range.From, range.To, ct);
 
-        var filteredRows = data.Sales
-            .Where(r => r.Date >= range.From && r.Date <= range.To)
-            .ToList();
+        await reportProgress(50, "Querying region targets…");
+        var regions = await _db.GetRegionsAsync(ct);
 
         await reportProgress(70, "Aggregating by region…");
 
         // Calculate target for the period (scale MonthlyTarget)
-        int periodDays = (range.To.ToDateTime(TimeOnly.MinValue) - range.From.ToDateTime(TimeOnly.MinValue)).Days + 1;
-        double monthFraction = periodDays / 30.0;
+        int periodDays   = (range.To.ToDateTime(TimeOnly.MinValue) - range.From.ToDateTime(TimeOnly.MinValue)).Days + 1;
+        double monthFrac = periodDays / 30.0;
 
-        var regionMap = data.Regions.ToDictionary(r => r.Name, StringComparer.OrdinalIgnoreCase);
+        var regionMap = regions.ToDictionary(r => r.Name, StringComparer.OrdinalIgnoreCase);
 
-        var regionGroups = filteredRows
+        var regionGroups = sales
             .GroupBy(r => r.Region)
             .Select(g =>
             {
                 decimal revenue = g.Sum(r => r.Revenue);
                 int     units   = g.Sum(r => r.Units);
 
-                decimal target = regionMap.TryGetValue(g.Key, out var regionInfo)
-                    ? Math.Round(regionInfo.MonthlyTarget * (decimal)monthFraction, 2)
+                decimal target = regionMap.TryGetValue(g.Key, out var ri)
+                    ? Math.Round(ri.MonthlyTarget * (decimal)monthFrac, 2)
                     : 50_000m;
 
                 double achievementPct = target > 0
@@ -88,11 +85,11 @@ public sealed class RegionalPerformanceHandler : IOperationHandler
 
         // Ensure all regions appear even if they have no sales in the period
         var presentRegions = regionGroups.Select(r => r.name).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var zeroRegions = data.Regions
+        var zeroRegions = regions
             .Where(r => !presentRegions.Contains(r.Name))
             .Select(r =>
             {
-                decimal target = Math.Round(r.MonthlyTarget * (decimal)monthFraction, 2);
+                decimal target = Math.Round(r.MonthlyTarget * (decimal)monthFrac, 2);
                 return new
                 {
                     name           = r.Name,

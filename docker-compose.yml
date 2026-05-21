@@ -8,12 +8,14 @@
 #   5100 → ingestion-api    (internal, reachable via gateway only)
 #   5200 → realtime-hub     (internal, reachable via gateway only)
 #   5400 → provider-bridge  (gRPC — internal)
-#   5432 → postgres
-#   6379 → redis
+#   5433 → postgres         (HDOS main DB)
+#   5434 → postgres-excel   (Excel Provider dedicated DB)
+#   6380 → redis
 #   5672 → rabbitmq (AMQP)
 #  15672 → rabbitmq (management UI)
 #   8180 → keycloak         (identity provider UI + OIDC)
 #   3000 → frontend         (React SPA)
+#   5600 → excel-provider   (Data Management API)
 #
 # First-time setup:
 #   1. Copy .env.example → .env and fill in HDOS_HOST (your server IP)
@@ -356,6 +358,26 @@ services:
     networks:
       - platform
 
+  # ─── Provider: postgres-excel (dedicated DB for Excel Provider) ──────────────
+
+  postgres-excel:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB:       excel_provider
+      POSTGRES_USER:     excel
+      POSTGRES_PASSWORD: excel
+    ports:
+      - "5434:5432"   # host 5434 → container 5432 (separate from HDOS DB on 5433)
+    volumes:
+      - postgres_excel_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U excel -d excel_provider"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - platform
+
   # ─── Provider: Excel Data Provider ───────────────────────────────────────────
 
   excel-provider:
@@ -364,22 +386,19 @@ services:
       dockerfile: Services/Excel.Provider/Dockerfile
     restart: unless-stopped
     environment:
-      DOTNET_ENVIRONMENT:          Development
-      ASPNETCORE_URLS:             http://+:5600
-      Provider__ClientId:          excel-provider
-      Provider__ClientSecret:      "${EXCEL_PROVIDER_SECRET:-excel-secret-dev-2024}"
-      Provider__TokenEndpoint:     http://request-api:5000/api/v1/providers/token
-      Provider__BridgeGrpcUrl:     http://provider-bridge:5400
-      Ingestion__BaseUrl:          http://ingestion-api:5100
-      Ingestion__TokenEndpoint:    http://request-api:5000/api/v1/providers/token
-      ConnectionStrings__Postgres: "Host=postgres;Database=hdos;Username=hdos;Password=hdos"
-      Excel__DataPath:             /app/ExcelData
+      DOTNET_ENVIRONMENT:              Development
+      ASPNETCORE_URLS:                 http://+:5600
+      Provider__ClientId:              excel-provider
+      Provider__ClientSecret:          "${EXCEL_PROVIDER_SECRET:-excel-secret-dev-2024}"
+      Provider__TokenEndpoint:         http://request-api:5000/api/v1/providers/token
+      Provider__BridgeGrpcUrl:         http://provider-bridge:5400
+      Ingestion__BaseUrl:              http://ingestion-api:5100
+      Ingestion__TokenEndpoint:        http://request-api:5000/api/v1/providers/token
+      ConnectionStrings__ExcelDb:      "Host=postgres-excel;Database=excel_provider;Username=excel;Password=excel"
     ports:
-      - "5600:5600"   # Data Management API — CRUD dữ liệu Excel
-    volumes:
-      - excel_data:/app/ExcelData
+      - "5600:5600"   # Data Management API — CRUD dữ liệu (sales + products)
     depends_on:
-      postgres:
+      postgres-excel:
         condition: service_healthy
       provider-bridge:
         condition: service_healthy
@@ -414,7 +433,7 @@ volumes:
   redis_data:
   rabbitmq_data:
   keycloak_data:
-  excel_data:
+  postgres_excel_data:
 
 networks:
   platform:

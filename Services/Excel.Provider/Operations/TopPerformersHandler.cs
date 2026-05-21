@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
-using ReportingPlatform.ExcelProvider.Excel;
+using ReportingPlatform.ExcelProvider.Database;
 using ReportingPlatform.Provider.V1;
 
 namespace ReportingPlatform.ExcelProvider.Operations;
@@ -13,14 +13,14 @@ namespace ReportingPlatform.ExcelProvider.Operations;
 /// </summary>
 public sealed class TopPerformersHandler : IOperationHandler
 {
-    private readonly ExcelDataLoader _loader;
+    private readonly ExcelProviderDb _db;
     private readonly ILogger<TopPerformersHandler> _logger;
 
     public string OperationPattern => "report.top.performers";
 
-    public TopPerformersHandler(ExcelDataLoader loader, ILogger<TopPerformersHandler> logger)
+    public TopPerformersHandler(ExcelProviderDb db, ILogger<TopPerformersHandler> logger)
     {
-        _loader = loader;
+        _db     = db;
         _logger = logger;
     }
 
@@ -32,10 +32,7 @@ public sealed class TopPerformersHandler : IOperationHandler
         var sw = Stopwatch.StartNew();
         _logger.LogInformation("TopPerformers starting — requestId={RequestId}", request.RequestId);
 
-        await reportProgress(10, "Loading Excel data…");
-        var data = await _loader.GetDataAsync(ct);
-
-        await reportProgress(30, "Parsing parameters…");
+        await reportProgress(10, "Parsing parameters…");
 
         using var doc = JsonDocument.Parse(request.ParamsJson ?? "{}");
         var root      = doc.RootElement;
@@ -62,10 +59,11 @@ public sealed class TopPerformersHandler : IOperationHandler
             "TopPerformers period={Period} current=[{CFrom},{CTo}] previous=[{PFrom},{PTo}]",
             period, currentFrom, currentTo, prevFrom, prevTo);
 
-        await reportProgress(50, "Aggregating current and previous period sales…");
+        await reportProgress(30, "Querying current period sales…");
+        var currentRows  = await _db.GetSalesByDateRangeAsync(currentFrom, currentTo, ct);
 
-        var currentRows  = data.Sales.Where(r => r.Date >= currentFrom && r.Date <= currentTo).ToList();
-        var previousRows = data.Sales.Where(r => r.Date >= prevFrom    && r.Date <= prevTo).ToList();
+        await reportProgress(50, "Querying previous period sales…");
+        var previousRows = await _db.GetSalesByDateRangeAsync(prevFrom, prevTo, ct);
 
         await reportProgress(70, "Ranking products and regions…");
 

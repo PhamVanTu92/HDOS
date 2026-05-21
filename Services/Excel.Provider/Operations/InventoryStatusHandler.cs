@@ -1,24 +1,24 @@
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
-using ReportingPlatform.ExcelProvider.Excel;
+using ReportingPlatform.ExcelProvider.Database;
 using ReportingPlatform.Provider.V1;
 
 namespace ReportingPlatform.ExcelProvider.Operations;
 
 /// <summary>
 /// Handler for <c>report.inventory.status</c>.
-/// Reads the Products sheet and classifies each product as ok / low / out.
+/// Reads the products table and classifies each product as ok / low / out.
 /// </summary>
 public sealed class InventoryStatusHandler : IOperationHandler
 {
-    private readonly ExcelDataLoader _loader;
+    private readonly ExcelProviderDb _db;
     private readonly ILogger<InventoryStatusHandler> _logger;
 
     public string OperationPattern => "report.inventory.status";
 
-    public InventoryStatusHandler(ExcelDataLoader loader, ILogger<InventoryStatusHandler> logger)
+    public InventoryStatusHandler(ExcelProviderDb db, ILogger<InventoryStatusHandler> logger)
     {
-        _loader = loader;
+        _db     = db;
         _logger = logger;
     }
 
@@ -27,18 +27,18 @@ public sealed class InventoryStatusHandler : IOperationHandler
         Func<int, string, Task> reportProgress,
         CancellationToken ct)
     {
-        await reportProgress(20, "Loading product data…");
-        var data = await _loader.GetDataAsync(ct);
+        await reportProgress(20, "Querying product data…");
+        var products = await _db.GetProductsAsync(ct);
 
-        _logger.LogInformation("InventoryStatus for {Count} products", data.Products.Count);
+        _logger.LogInformation("InventoryStatus for {Count} products", products.Count);
 
         await reportProgress(70, "Classifying stock levels…");
 
-        var products = data.Products.Select(p =>
+        var productList = products.Select(p =>
         {
-            string status = p.CurrentStock == 0    ? "out"
+            string status = p.CurrentStock == 0        ? "out"
                           : p.CurrentStock < p.MinStock ? "low"
-                          :                              "ok";
+                          :                               "ok";
             return new
             {
                 name     = p.Name,
@@ -48,16 +48,16 @@ public sealed class InventoryStatusHandler : IOperationHandler
             };
         }).ToList();
 
-        int okCount  = products.Count(p => p.status == "ok");
-        int lowCount = products.Count(p => p.status == "low");
-        int outCount = products.Count(p => p.status == "out");
+        int okCount  = productList.Count(p => p.status == "ok");
+        int lowCount = productList.Count(p => p.status == "low");
+        int outCount = productList.Count(p => p.status == "out");
 
         await reportProgress(90, "Building response…");
 
         var result = new
         {
-            products,
-            summary = new { ok = okCount, low = lowCount, @out = outCount },
+            products = productList,
+            summary  = new { ok = okCount, low = lowCount, @out = outCount },
         };
 
         return JsonSerializer.Serialize(result);
