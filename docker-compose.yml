@@ -201,11 +201,14 @@ services:
       ASPNETCORE_ENVIRONMENT:  Development
       Bridge__JwksUrl:         http://request-api:5000/.well-known/jwks.json
       Bridge__GrpcUrl:         http://provider-bridge:5400
-      Redis__ConnectionString: redis:6379
-      RabbitMQ__Uri:           amqp://guest:guest@rabbitmq/
+      Redis__ConnectionString:     redis:6379
+      RabbitMQ__Uri:               amqp://guest:guest@rabbitmq/
+      ConnectionStrings__Postgres: "Host=postgres;Database=hdos;Username=hdos;Password=hdos"
     ports:
       - "5400:5400"
     depends_on:
+      postgres:
+        condition: service_healthy
       request-api:
         condition: service_healthy
       rabbitmq:
