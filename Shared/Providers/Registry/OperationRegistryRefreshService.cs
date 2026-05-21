@@ -25,14 +25,54 @@ internal sealed class OperationRegistryRefreshService : IHostedService
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
-        // Pre-warm both snapshots before accepting traffic.
-        await _operationRegistry.ReloadAsync(cancellationToken);
-        await _providerRegistry.ReloadAsync(cancellationToken);
+        // Attempt to pre-warm both snapshots.  If the database is transiently
+        // unavailable (e.g. container start-up race despite depends_on healthy
+        // check), catch the error, log it, and schedule a background retry
+        // rather than crashing the entire host.
+        try
+        {
+            await _operationRegistry.ReloadAsync(cancellationToken);
+            await _providerRegistry.ReloadAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "Registry warm-up failed at startup — DB may not be ready yet. " +
+                "Scheduling background retry; registry will be empty until reload succeeds.");
+            _ = Task.Run(RetryLoadAsync, CancellationToken.None);
+        }
 
         _subscriber = _redis.GetSubscriber();
         await _subscriber.SubscribeAsync(
             RedisChannel.Literal("operation-registry:updated"),
             OnOperationRegistryMessage);
+    }
+
+    /// <summary>
+    /// Background retry loop: 5 s → 15 s → 30 s → 60 s, then gives up.
+    /// </summary>
+    private async Task RetryLoadAsync()
+    {
+        int[] delays = [5, 15, 30, 60];
+        foreach (var delaySecs in delays)
+        {
+            await Task.Delay(TimeSpan.FromSeconds(delaySecs));
+            try
+            {
+                await _operationRegistry.ReloadAsync(CancellationToken.None);
+                await _providerRegistry.ReloadAsync(CancellationToken.None);
+                _logger.LogInformation("Registry warm-up succeeded on background retry.");
+                return;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex,
+                    "Registry warm-up retry failed (next delay: {NextDelay}s).", delaySecs * 2);
+            }
+        }
+        _logger.LogError(
+            "Registry warm-up failed after all retries. " +
+            "Registry will remain empty until the next pub/sub hot-reload signal.");
     }
 
     public async Task StopAsync(CancellationToken cancellationToken)
