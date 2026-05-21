@@ -22,9 +22,11 @@ public static class AdaptersExtensions
         // If the caller hasn't configured a separate one, fall back to Database:Data.
         var connStr = configuration["Database:Data"]
             ?? configuration.GetConnectionString("Data")
+            ?? configuration.GetConnectionString("Postgres")   // shared-Postgres fallback
             ?? throw new InvalidOperationException(
                 "Data connection string not configured. " +
-                "Set 'Database:Data' or 'ConnectionStrings:Data'.");
+                "Set 'Database:Data', 'ConnectionStrings:Data', " +
+                "or 'ConnectionStrings:Postgres'.");
 
         var dataSource = NpgsqlDataSource.Create(connStr);
 

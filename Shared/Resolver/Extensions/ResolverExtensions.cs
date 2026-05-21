@@ -29,9 +29,11 @@ public static class ResolverExtensions
             ?? configuration.GetConnectionString("Definitions")
             ?? configuration["Database:QueryBuilder"]
             ?? configuration.GetConnectionString("QueryBuilder")
+            ?? configuration.GetConnectionString("Postgres")   // shared-Postgres fallback
             ?? throw new InvalidOperationException(
                 "Definitions connection string not configured. " +
-                "Set 'Database:Definitions' or reuse 'Database:QueryBuilder'.");
+                "Set 'Database:Definitions', 'ConnectionStrings:QueryBuilder', " +
+                "or 'ConnectionStrings:Postgres'.");
 
         var dataSource = NpgsqlDataSource.Create(connStr);
 

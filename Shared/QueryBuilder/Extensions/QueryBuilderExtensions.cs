@@ -15,9 +15,11 @@ public static class QueryBuilderExtensions
     {
         var connStr = configuration["Database:QueryBuilder"]
             ?? configuration.GetConnectionString("QueryBuilder")
+            ?? configuration.GetConnectionString("Postgres")   // shared-Postgres fallback
             ?? throw new InvalidOperationException(
                 "QueryBuilder connection string not configured. " +
-                "Set 'Database:QueryBuilder' or 'ConnectionStrings:QueryBuilder'.");
+                "Set 'Database:QueryBuilder', 'ConnectionStrings:QueryBuilder', " +
+                "or 'ConnectionStrings:Postgres'.");
 
         // Capture one shared NpgsqlDataSource — not added to the DI container directly
         // to avoid collision with other NpgsqlDataSource registrations (e.g. Providers).

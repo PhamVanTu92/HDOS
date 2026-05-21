@@ -5,9 +5,13 @@ using Microsoft.AspNetCore.RateLimiting;
 using Npgsql;
 using ReportingPlatform.Auth;
 using ReportingPlatform.Caching;
+using ReportingPlatform.Adapters.Extensions;
 using ReportingPlatform.Metadata.Extensions;
 using ReportingPlatform.Operations.Extensions;
 using ReportingPlatform.Providers.Extensions;
+using ReportingPlatform.QueryBuilder.Extensions;
+using ReportingPlatform.Resolver.Extensions;
+using ReportingPlatform.Transformers.Extensions;
 using ReportingPlatform.RequestApi.Controllers;
 using ReportingPlatform.RequestApi.Services;
 using ReportingPlatform.RequestApi.Sse;
@@ -46,6 +50,14 @@ if (builder.Environment.IsProduction())
 // ── Metadata repositories (Dashboard, Datasource, Schema) ────────────────
 // Must be registered before AddPlatformOperations() — handlers depend on these.
 builder.Services.AddPlatformMetadata();
+
+// ── Full query / adapter / transformer / resolver stack ───────────────────
+// All required by operation handlers registered in AddPlatformOperations().
+// These extensions fall back to ConnectionStrings:Postgres if specific keys absent.
+builder.Services.AddPlatformQueryBuilder(builder.Configuration);
+builder.Services.AddPlatformTransformers();
+builder.Services.AddPlatformAdapters(builder.Configuration);
+builder.Services.AddPlatformResolver(builder.Configuration);
 
 // ── Provider registry (uses the NpgsqlDataSource already registered above) ─
 builder.Services.AddPlatformProvidersWithExistingDataSource();
