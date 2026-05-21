@@ -117,12 +117,12 @@ public sealed class RequestsController : ControllerBase
         ?? throw new UnauthorizedAccessException();
 
     private string TenantId() =>
-        User.FindFirstValue("tenant")
+        User.FindFirstValue("tenant_id")
         ?? throw new UnauthorizedAccessException();
 
     private void EnforceTenantMatch(string envelopeTenantId)
     {
-        var jwtTenant = User.FindFirstValue("tenant");
+        var jwtTenant = User.FindFirstValue("tenant_id");
         if (!string.Equals(jwtTenant, envelopeTenantId, StringComparison.Ordinal))
             throw new OperationException("FORBIDDEN", "Tenant claim mismatch.");
     }
