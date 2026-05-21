@@ -35,7 +35,10 @@ builder.Services.AddPlatformTelemetry(builder.Configuration, "Event.Processor.Wo
 // Redis (for L1 cache invalidation pub/sub — Option A Patch 2)
 // ------------------------------------------------------------------
 
-builder.Services.AddSingleton<IConnectionMultiplexer>(
+// Use a factory lambda so the connection is deferred until first use;
+// calling Connect() eagerly at registration time can fail if Redis DNS
+// is not yet reachable at the exact moment Program.cs runs.
+builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
     ConnectionMultiplexer.Connect(redisConnStr));
 
 // ------------------------------------------------------------------
