@@ -201,10 +201,13 @@ services:
       Bridge__JwksUrl:         http://request-api:5000/.well-known/jwks.json
       Bridge__GrpcUrl:         http://provider-bridge:5400
       Redis__ConnectionString: redis:6379
+      RabbitMQ__Uri:           amqp://guest:guest@rabbitmq/
     ports:
       - "5400:5400"
     depends_on:
       request-api:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:5400/healthz || exit 1"]

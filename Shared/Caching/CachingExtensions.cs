@@ -9,7 +9,12 @@ public static class CachingExtensions
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        var connectionString = configuration["Redis:ConnectionString"] ?? "localhost:6379";
+        // Support two naming conventions:
+        //   Redis:ConnectionString  (= env Redis__ConnectionString)     — web services
+        //   ConnectionStrings:Redis (= env ConnectionStrings__Redis)    — worker services
+        var connectionString = configuration["Redis:ConnectionString"]
+            ?? configuration.GetConnectionString("Redis")
+            ?? "localhost:6379";
 
         services.AddSingleton<IConnectionMultiplexer>(
             _ => ConnectionMultiplexer.Connect(connectionString));
