@@ -108,7 +108,7 @@ public sealed class ProviderRequestConsumer : IAsyncDisposable
         OperationRequestMessage? msg = null;
         try
         {
-            msg = JsonSerializer.Deserialize(ea.Body.Span, MessagingContractsJsonContext.Default.OperationRequestMessage);
+            msg = DeserializeRequest(ea.Body.Span);
         }
         catch (Exception ex)
         {
@@ -189,6 +189,26 @@ public sealed class ProviderRequestConsumer : IAsyncDisposable
             if (_pending.TryGetValue(chunk.RequestId, out var tcs))
                 tcs.TrySetResult(chunk.Terminal);
         }
+    }
+
+    // Accepts both a raw OperationRequestMessage JSON and a MassTransit envelope
+    // ({ "messageType": [...], "message": { ...actual fields... } }). request-api
+    // publishes via MassTransit (enveloped); direct/manual publishes are raw.
+    private static OperationRequestMessage? DeserializeRequest(ReadOnlySpan<byte> body)
+    {
+        using var doc = JsonDocument.Parse(body.ToArray());
+        var root = doc.RootElement;
+
+        if (root.ValueKind == JsonValueKind.Object &&
+            root.TryGetProperty("message", out var inner) &&
+            inner.ValueKind == JsonValueKind.Object)
+        {
+            // MassTransit envelope — deserialize the nested "message" object.
+            return inner.Deserialize(MessagingContractsJsonContext.Default.OperationRequestMessage);
+        }
+
+        // Raw message.
+        return JsonSerializer.Deserialize(body, MessagingContractsJsonContext.Default.OperationRequestMessage);
     }
 
     private static OperationResponseMessage BuildResponse(OperationRequestMessage msg, Terminal terminal)
