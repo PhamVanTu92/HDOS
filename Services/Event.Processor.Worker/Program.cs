@@ -45,13 +45,11 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
 // SignalR backplane (same Redis instance)
 // ------------------------------------------------------------------
 
+// AddSignalR already registers IHubContext<MainHub, IMainHubClient>, which this
+// worker resolves to push WidgetStale via the Redis backplane (no live Hub needed).
 builder.Services.AddSignalR()
     .AddStackExchangeRedis(redisConnStr)
     .AddMessagePackProtocol();
-
-// Hub context — allows pushing WidgetStale from this worker without a live Hub.
-builder.Services.AddSingleton<IHubContext<MainHub, IMainHubClient>>(sp =>
-    sp.GetRequiredService<IHubContext<MainHub, IMainHubClient>>());
 
 // ------------------------------------------------------------------
 // Metadata — event subscription repository
