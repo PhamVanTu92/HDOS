@@ -40,16 +40,26 @@ export interface RequestResult<T = unknown> {
 
 // ─── SignalR event payloads ───────────────────────────────────────────────────
 
+// Mirrors backend ResponseDispatchPushMessage (MessagePack [Key] names).
+// Pushed over SignalR on terminal state — carries the full result so the client
+// does not need to GET /requests/{id}/result.
 export interface RequestCompletedEvent {
   requestId: string;
+  // wire values: "done" | "failed" | "timeout" | "cancelled"
+  status: string;
   operation: string;
-  tenantId: string;
-  userId: string;
+  payloadJson?: string | null;
+  error?: { code?: string; message?: string } | null;
+  elapsedMs?: number;
 }
 
 export interface RequestFailedEvent {
   requestId: string;
-  error: string;
+  status: string;
+  operation: string;
+  payloadJson?: string | null;
+  error?: { code?: string; message?: string } | null;
+  elapsedMs?: number;
 }
 
 export interface RequestCancelledEvent {

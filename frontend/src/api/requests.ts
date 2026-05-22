@@ -3,9 +3,39 @@ import { apiGet, apiPost } from './client';
 import type {
   RequestEnvelope,
   RequestResult,
+  RequestCompletedEvent,
+  RequestFailedEvent,
   SubmitAck,
   Priority,
 } from '../types/contracts';
+
+// Maps a terminal SignalR push (ResponseDispatchPushMessage) into the same
+// RequestResult<T> shape the polling path produces — so consumers can treat push
+// and GET identically. Push status wire values: done|failed|timeout|cancelled.
+export function mapPushToResult<T = unknown>(
+  push: RequestCompletedEvent | RequestFailedEvent,
+): RequestResult<T> {
+  const base = { requestId: push.requestId, operation: push.operation ?? '' };
+  switch ((push.status ?? '').toLowerCase()) {
+    case 'done': {
+      let data: T | undefined;
+      try {
+        data = push.payloadJson ? (JSON.parse(push.payloadJson) as T) : undefined;
+      } catch {
+        data = undefined;
+      }
+      return { ...base, status: 'Completed', data };
+    }
+    case 'cancelled':
+      return { ...base, status: 'Cancelled' };
+    default:
+      return {
+        ...base,
+        status: 'Failed',
+        error: push.error?.message ?? `Report ${(push.status ?? 'failed').toLowerCase()}`,
+      };
+  }
+}
 
 export interface SubmitOptions {
   operation: string;
