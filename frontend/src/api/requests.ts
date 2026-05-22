@@ -33,10 +33,56 @@ export async function submitRequest(opts: SubmitOptions): Promise<SubmitAck> {
   return apiPost<RequestEnvelope, SubmitAck>('/api/v1/requests', envelope);
 }
 
+// Backend response from GET /requests/{id}/result. Shapes:
+//  • in_flight (202): { status: "in_flight", requestId, submittedAt }
+//  • completed (200): { status: "completed", requestId, result: {
+//        status: "Done"|"Failed"|"Cancelled"|"Timeout",
+//        payloadJson: string, error: { code, message } | null, ... } }
+interface RawResultResponse {
+  status: string;
+  requestId: string;
+  result?: {
+    status: string;
+    payloadJson: string | null;
+    error: { code?: string; message?: string } | null;
+  };
+}
+
 export async function getRequestResult<T = unknown>(
   requestId: string,
 ): Promise<RequestResult<T>> {
-  return apiGet<RequestResult<T>>(`/api/v1/requests/${requestId}/result`);
+  const raw = await apiGet<RawResultResponse>(
+    `/api/v1/requests/${requestId}/result`,
+  );
+
+  // Still processing.
+  if (raw.status !== 'completed' || !raw.result) {
+    return { requestId, status: 'Processing', operation: '' };
+  }
+
+  const inner = raw.result;
+  switch (inner.status) {
+    case 'Done': {
+      let data: T | undefined;
+      try {
+        data = inner.payloadJson ? (JSON.parse(inner.payloadJson) as T) : undefined;
+      } catch {
+        data = undefined;
+      }
+      return { requestId, status: 'Completed', operation: '', data };
+    }
+    case 'Cancelled':
+      return { requestId, status: 'Cancelled', operation: '' };
+    case 'Failed':
+    case 'Timeout':
+    default:
+      return {
+        requestId,
+        status: 'Failed',
+        operation: '',
+        error: inner.error?.message ?? `Report ${inner.status?.toLowerCase()}`,
+      };
+  }
 }
 
 /** Poll until status is terminal or maxAttempts exceeded. */
