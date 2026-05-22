@@ -228,6 +228,7 @@ services:
       ConnectionStrings__Redis:    redis:6379
       Auth__Authority:             "${AUTH_AUTHORITY:-http://keycloak:8080/realms/hdos}"
       Auth__Audience:              "${AUTH_AUDIENCE:-reporting-platform}"
+      Auth__PublicIssuer:          "https://${HDOS_HOST:-localhost}/realms/hdos"
       ConnectionStrings__Postgres: "Host=postgres;Database=hdos;Username=hdos;Password=hdos"
     extra_hosts:
       - "host.docker.internal:host-gateway"

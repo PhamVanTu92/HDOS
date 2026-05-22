@@ -35,20 +35,46 @@ builder.Services.AddPlatformTelemetry(builder.Configuration, "Ingestion.Api");
 // JWT authentication (same JWKS as user auth — scope distinguishes token type)
 // ------------------------------------------------------------------
 
+var jwtAuth      = builder.Configuration["Auth:Authority"] ?? string.Empty;
+var jwtAud       = builder.Configuration["Auth:Audience"]  ?? string.Empty;
+var publicIssuer = builder.Configuration["Auth:PublicIssuer"] ?? jwtAuth;
+
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(opts =>
     {
-        opts.Authority = builder.Configuration["Auth:Authority"];
-        opts.Audience  = builder.Configuration["Auth:Audience"];
-        opts.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
+        opts.MetadataAddress      = $"{jwtAuth}/.well-known/openid-configuration";
+        opts.Authority            = jwtAuth;
+        opts.Audience             = jwtAud;
+        opts.RequireHttpsMetadata = false;
+        // Tokens minted via the public Keycloak URL carry the public issuer, but
+        // signatures verify against the internal JWKS. Accept both issuers and
+        // rewrite backchannel metadata/JWKS fetches to the internal hostname.
+        opts.BackchannelHttpHandler = new KeycloakInternalHandler(publicIssuer);
+        opts.TokenValidationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters
+        {
+            ValidIssuers     = [jwtAuth, publicIssuer],
+            ValidAudience    = jwtAud,
+            ValidateLifetime = true,
+            ClockSkew        = TimeSpan.FromSeconds(30),
+        };
     });
 
-// Policy: require Bearer JWT with 'ingestion' scope.
+// Policy: require Bearer JWT granting the 'ingestion' scope. Keycloak emits the
+// scope claim as a single space-separated string ("openid profile ... ingestion"),
+// so check membership rather than an exact-value claim match.
 builder.Services.AddAuthorization(opts =>
 {
     opts.AddPolicy("IngestionScope", policy =>
         policy.RequireAuthenticatedUser()
-              .RequireClaim("scope", "ingestion"));
+              .RequireAssertion(ctx =>
+              {
+                  var scopeClaim = ctx.User.FindFirst("scope")?.Value;
+                  if (!string.IsNullOrEmpty(scopeClaim) &&
+                      scopeClaim.Split(' ').Contains("ingestion"))
+                      return true;
+                  // Fallback: some setups split scope into individual claims.
+                  return ctx.User.FindAll("scope").Any(c => c.Value == "ingestion");
+              }));
 });
 
 // ------------------------------------------------------------------
@@ -165,6 +191,27 @@ app.MapHealthChecks("/healthz/ready", new HealthCheckOptions
 }).AllowAnonymous();
 
 app.Run();
+
+// Rewrites backchannel OIDC/JWKS fetches from the public Keycloak host to the
+// internal Docker hostname so metadata resolves on the platform network.
+sealed file class KeycloakInternalHandler : HttpClientHandler
+{
+    private readonly string _externalHost;
+    public KeycloakInternalHandler(string publicIssuerUrl)
+    {
+        _externalHost = new Uri(publicIssuerUrl).Host;
+        ServerCertificateCustomValidationCallback =
+            HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
+    }
+    protected override Task<HttpResponseMessage> SendAsync(
+        HttpRequestMessage request, CancellationToken ct)
+    {
+        if (request.RequestUri?.Host == _externalHost)
+            request.RequestUri = new UriBuilder(request.RequestUri)
+                { Scheme = "http", Host = "keycloak", Port = 8080 }.Uri;
+        return base.SendAsync(request, ct);
+    }
+}
 
 namespace ReportingPlatform.IngestionApi
 {
