@@ -139,11 +139,14 @@ builder.Services.AddMassTransit(x =>
     {
         cfg.Host(new Uri(rabbitUri));
 
-        // Publish IngestEventEnvelope to the "events.raw" topic exchange.
-        // Exchange type is declared as fanout (MassTransit default); the Event.Processor.Worker
-        // consumer binds to it with "events.#" routing key.
-        // Selective per-tenant routing keys are a Phase 12 enhancement.
+        // Publish IngestEventEnvelope to the "events.raw" TOPIC exchange. The
+        // Event.Processor.Worker declares/binds events.raw as topic with routing key
+        // "events.#", so the publisher MUST (a) match the exchange type — otherwise
+        // RabbitMQ rejects with PRECONDITION_FAILED (fanout vs topic) and POST /events
+        // hangs — and (b) send a routing key under "events." so the worker receives it.
         cfg.Message<IngestEventEnvelope>(m => m.SetEntityName("events.raw"));
+        cfg.Publish<IngestEventEnvelope>(p => p.ExchangeType = "topic");
+        cfg.Send<IngestEventEnvelope>(s => s.UseRoutingKeyFormatter(_ => "events.ingest"));
     });
 });
 
