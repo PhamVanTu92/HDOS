@@ -46,6 +46,17 @@ public sealed class ProviderRequestConsumer : IAsyncDisposable
         var channel   = await rabbitConnection.CreateChannelAsync(cancellationToken: ct);
         var queueName = $"q.provider.{providerId}";
 
+        // Ensure the parent exchange exists before binding. Request.Api/Worker
+        // declare it lazily on first publish/consume, but a fresh bridge session
+        // may start before either has done so — bind would then fail with NOT_FOUND.
+        // Fanout matches MassTransit's default for SetEntityName.
+        await channel.ExchangeDeclareAsync(
+            exchange:   "operation.request",
+            type:       "fanout",
+            durable:    true,
+            autoDelete: false,
+            cancellationToken: ct);
+
         try
         {
             await channel.QueueDeclareAsync(

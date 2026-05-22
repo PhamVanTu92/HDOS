@@ -75,7 +75,16 @@ builder.Services.AddHostedService<PendingHashCleanupService>();
 // ── MassTransit (publish only) ────────────────────────────────────────────
 builder.Services.AddMassTransit(x =>
 {
-    x.UsingRabbitMq((_, cfg) => cfg.Host(new Uri(rabbitUri)));
+    x.UsingRabbitMq((_, cfg) =>
+    {
+        cfg.Host(new Uri(rabbitUri));
+        // Must match the exchange name declared by Operation.Router.Worker and
+        // bound by Provider.Bridge — otherwise published messages land on the
+        // default ReportingPlatform.Contracts.Messaging:OperationRequestMessage
+        // exchange where nobody consumes them.
+        cfg.Message<ReportingPlatform.Contracts.Messaging.OperationRequestMessage>(m =>
+            m.SetEntityName("operation.request"));
+    });
 });
 
 // ── Platform operations (RequestSubmissionService, ICancelBus) ────────────
