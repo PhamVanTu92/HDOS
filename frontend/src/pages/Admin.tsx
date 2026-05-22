@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useAuth } from 'react-oidc-context';
 import {
   listProviders,
   registerProvider,
@@ -11,15 +10,7 @@ import {
   type ProbeResult,
   type RegisterRequest,
 } from '../api/admin';
-import { ApiError } from '../api/client';
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function isAdminUser(user: ReturnType<typeof useAuth>['user']): boolean {
-  const profile = user?.profile as Record<string, unknown> | undefined;
-  const realmAccess = profile?.realm_access as { roles?: string[] } | undefined;
-  return realmAccess?.roles?.includes('admin') ?? false;
-}
+import { ApiError, hasRealmRole } from '../api/client';
 
 function statusColor(status: ProviderInfo['status']): string {
   switch (status) {
@@ -500,7 +491,6 @@ function RegisterModal({ onClose, onSuccess }: RegisterModalProps) {
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export function Admin() {
-  const auth         = useAuth();
   const queryClient  = useQueryClient();
   const [showModal, setShowModal] = useState(false);
 
@@ -511,7 +501,7 @@ export function Admin() {
   });
 
   // Guard: non-admin users
-  if (!isAdminUser(auth.user)) {
+  if (!hasRealmRole('admin')) {
     return (
       <div className="flex h-full items-center justify-center">
         <div className="text-center">

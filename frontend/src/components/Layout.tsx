@@ -2,7 +2,7 @@ import { type ReactNode, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from 'react-oidc-context';
 import { useSignalRConnection } from '../hooks/useSignalR';
-import type { User } from 'oidc-client-ts';
+import { hasRealmRole } from '../api/client';
 
 interface NavItem {
   to: string;
@@ -52,16 +52,10 @@ const NAV_ITEMS: NavItem[] = [
 
 const ADMIN_NAV: NavItem = { to: '/admin', label: 'Admin', icon: <CogIcon /> };
 
-function hasAdminRole(user: User | null | undefined): boolean {
-  const profile = user?.profile as Record<string, unknown> | undefined;
-  const realmAccess = profile?.realm_access as { roles?: string[] } | undefined;
-  return realmAccess?.roles?.includes('admin') ?? false;
-}
-
 export function Layout({ children }: { children: ReactNode }) {
   const auth        = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const isAdmin     = hasAdminRole(auth.user);
+  const isAdmin     = hasRealmRole('admin');
 
   // Manages the global SignalR connection lifecycle
   useSignalRConnection();

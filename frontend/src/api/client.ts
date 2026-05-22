@@ -26,6 +26,20 @@ export function getAccessToken(): string | null {
   }
 }
 
+/** Returns true if the access token grants the given realm role. */
+export function hasRealmRole(role: string): boolean {
+  const token = getAccessToken();
+  if (!token) return false;
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1])) as {
+      realm_access?: { roles?: string[] };
+    };
+    return payload.realm_access?.roles?.includes(role) ?? false;
+  } catch {
+    return false;
+  }
+}
+
 /** @deprecated No-op — kept for backward compatibility */
 export function registerTokenProvider(_fn: () => string | null): void { /* noop */ }
 
