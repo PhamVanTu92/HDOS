@@ -343,8 +343,11 @@ public sealed class AdminProvidersController : ControllerBase
         catch (Grpc.Core.RpcException ex) when (ex.StatusCode == Grpc.Core.StatusCode.Unauthenticated)
         {
             tlsHandshake = true;
-            jwtAccepted  = false;
-            errorDetail  = "jwt_rejected";
+            // Bridge throws Unauthenticated for both invalid JWT and "Provider not found"
+            // (after successful JWT validation). Use the status detail to disambiguate.
+            var detail = ex.Status.Detail ?? string.Empty;
+            jwtAccepted  = detail.Contains("Provider not found", StringComparison.OrdinalIgnoreCase);
+            errorDetail  = jwtAccepted ? "provider_not_in_bridge_registry" : "jwt_rejected";
         }
         catch (OperationCanceledException)
         {

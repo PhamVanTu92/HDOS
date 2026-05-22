@@ -77,6 +77,8 @@ public sealed class JwtValidationInterceptor : Interceptor
         try
         {
             var handler   = new JwtSecurityTokenHandler();
+            // Disable legacy SAML claim remapping so "sub" stays as "sub" (not NameIdentifier).
+            handler.InboundClaimTypeMap.Clear();
             var principal = handler.ValidateToken(token, validationParams, out _);
 
             var scope = principal.FindFirst("scope")?.Value ?? string.Empty;
