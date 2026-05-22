@@ -106,7 +106,7 @@ for i in $(seq 1 30); do
     printf "  [%2ds] HTTP=%s status=%-12s\n" "$elapsed" "$code_body" "${status:-?}"
 
     case "$status" in
-        Completed|Failed|Cancelled) final="$status"; break ;;
+        completed|failed|cancelled|orphan*) final="$status"; break ;;
     esac
     sleep 2
 done
@@ -118,7 +118,8 @@ step "5/5  Kết quả cuối"
 echo "$body" | pretty
 
 case "$final" in
-    Completed) ok "END-TO-END PASS — provider trả data thành công ($((elapsed))s)" ;;
-    Failed)    fail "Request failed — xem 'error' field ở response" ;;
-    Cancelled) fail "Request cancelled" ;;
+    completed) ok "END-TO-END PASS — provider trả data thành công (${elapsed}s)" ;;
+    failed)    fail "Request failed — xem 'error' field ở response" ;;
+    cancelled) fail "Request cancelled" ;;
+    orphan*)   fail "Request orphaned — không bao giờ tới worker hoặc worker chết" ;;
 esac
