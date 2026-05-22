@@ -130,6 +130,8 @@ public sealed class ProviderRequestConsumer : IAsyncDisposable
 
         try
         {
+            _logger.LogInformation("Forwarding request {RequestId} (op={Operation}) to provider stream",
+                msg.RequestId, msg.Operation);
             await _toProvider.WriteAsync(new ToProvider
             {
                 Request = new OperationRequest
