@@ -102,13 +102,14 @@ public sealed class ProviderSession
             }
 
             // ── Phase 3: Send Welcome ─────────────────────────────────────────────
+            const int heartbeatIntervalSeconds = 30;
             await _toProvider.WriteAsync(new ToProvider
             {
                 Welcome = new Welcome
                 {
                     SessionId                = SessionId,
                     MaxConcurrentRequests    = _registration.MaxConcurrentRequests,
-                    HeartbeatIntervalSeconds = 30,
+                    HeartbeatIntervalSeconds = heartbeatIntervalSeconds,
                 }
             }, ct);
 
@@ -116,7 +117,10 @@ public sealed class ProviderSession
             _sessionManager.Register(SessionId, ProviderId, CloseAsync);
 
             // ── Phase 4: Start heartbeat + RefreshAuth timers ─────────────────────
-            _heartbeat = new HeartbeatMonitor(() => CloseAsync("idle_timeout"));
+            // Timeout = 3× interval: provider sends its first beat one full interval
+            // after Welcome, so the threshold must comfortably exceed the interval.
+            _heartbeat = new HeartbeatMonitor(() => CloseAsync("idle_timeout"),
+                timeoutSeconds: heartbeatIntervalSeconds * 3);
 
             var jwtExp    = jwtClaims.FindFirst(JwtRegisteredClaimNames.Exp)?.Value;
             var expUnixMs = jwtExp is not null && long.TryParse(jwtExp, out var expSec)
