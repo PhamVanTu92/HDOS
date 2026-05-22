@@ -7,7 +7,7 @@ using ReportingPlatform.Provider.V1;
 namespace ReportingPlatform.RequestApi.Controllers;
 
 /// <summary>
-/// Admin endpoints for provider credential management and connectivity probe.
+/// Admin endpoints for provider management, credential rotation, and gRPC connectivity probe.
 /// Requires role: admin (enforced via [Authorize(Roles = "admin")]).
 /// </summary>
 [ApiController]
@@ -33,6 +33,113 @@ public sealed class AdminProvidersController : ControllerBase
         _db       = db;
         _config   = config;
         _logger   = logger;
+    }
+
+    // ── GET /api/v1/admin/providers ──────────────────────────────────────────
+
+    [HttpGet]
+    public async Task<IActionResult> ListAsync(CancellationToken ct)
+    {
+        var rows = new List<object>();
+
+        await using var conn = await _db.OpenConnectionAsync(ct);
+        await using var cmd  = conn.CreateCommand();
+        cmd.CommandText = """
+            SELECT provider_id, display_name, description, client_id,
+                   operations, timeout_ms, priority, status,
+                   created_at, updated_at
+            FROM provider_registry
+            ORDER BY display_name
+            """;
+
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            rows.Add(new
+            {
+                providerId   = reader.GetString(0),
+                displayName  = reader.GetString(1),
+                description  = reader.IsDBNull(2) ? null : reader.GetString(2),
+                clientId     = reader.GetString(3),
+                operations   = (string[])(reader.GetValue(4) ?? Array.Empty<string>()),
+                timeoutMs    = reader.GetInt32(5),
+                priority     = reader.GetInt16(6),
+                status       = reader.GetString(7),
+                createdAt    = reader.GetDateTime(8),
+                updatedAt    = reader.GetDateTime(9),
+            });
+        }
+
+        return Ok(rows);
+    }
+
+    // ── POST /api/v1/admin/providers ─────────────────────────────────────────
+
+    [HttpPost]
+    public async Task<IActionResult> RegisterAsync(
+        [FromBody] RegisterProviderRequest req,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(req.ProviderId) ||
+            string.IsNullOrWhiteSpace(req.ClientId)   ||
+            string.IsNullOrWhiteSpace(req.ClientSecret))
+            return BadRequest(new { error = "providerId, clientId and clientSecret are required." });
+
+        var secretHash = BCrypt.Net.BCrypt.HashPassword(req.ClientSecret, workFactor: 12);
+        var ops        = req.Operations ?? [];
+
+        await using var conn = await _db.OpenConnectionAsync(ct);
+        await using var tx   = await conn.BeginTransactionAsync(ct);
+        try
+        {
+            await using var insert = conn.CreateCommand();
+            insert.Transaction  = tx;
+            insert.CommandText  = """
+                INSERT INTO provider_registry
+                    (provider_id, display_name, description, client_id,
+                     client_secret_hash, operations, timeout_ms, priority, status)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'active')
+                ON CONFLICT (provider_id) DO NOTHING
+                RETURNING provider_id
+                """;
+            insert.Parameters.AddWithValue(req.ProviderId.Trim());
+            insert.Parameters.AddWithValue(req.DisplayName?.Trim() ?? req.ProviderId.Trim());
+            insert.Parameters.AddWithValue(req.Description is null ? DBNull.Value : (object)req.Description.Trim());
+            insert.Parameters.AddWithValue(req.ClientId.Trim());
+            insert.Parameters.AddWithValue(secretHash);
+            insert.Parameters.AddWithValue(ops);
+            insert.Parameters.AddWithValue(req.TimeoutMs > 0 ? req.TimeoutMs : 30_000);
+            insert.Parameters.AddWithValue((short)Math.Clamp(req.Priority, 1, 10));
+
+            var created = await insert.ExecuteScalarAsync(ct);
+            if (created is null)
+            {
+                await tx.RollbackAsync(ct);
+                return Conflict(new { error = $"Provider '{req.ProviderId}' already exists." });
+            }
+
+            await using var audit = conn.CreateCommand();
+            audit.Transaction  = tx;
+            audit.CommandText  = """
+                INSERT INTO provider_credentials_audit (provider_id, action, performed_by)
+                VALUES ($1, 'register', $2)
+                """;
+            audit.Parameters.AddWithValue(req.ProviderId.Trim());
+            audit.Parameters.AddWithValue(AdminUserId());
+            await audit.ExecuteNonQueryAsync(ct);
+
+            await tx.CommitAsync(ct);
+        }
+        catch
+        {
+            await tx.RollbackAsync(ct);
+            throw;
+        }
+
+        await _registry.ReloadAsync(ct);
+
+        return Created($"/api/v1/admin/providers/{req.ProviderId}",
+            new { providerId = req.ProviderId, registeredAt = DateTimeOffset.UtcNow });
     }
 
     // ── POST /api/v1/admin/providers/{id}/credentials/rotate ─────────────────
@@ -284,4 +391,18 @@ public sealed class AdminProvidersController : ControllerBase
 
     private string AdminUserId() =>
         User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "unknown-admin";
+}
+
+// ── Request DTOs ─────────────────────────────────────────────────────────────
+
+public sealed record RegisterProviderRequest
+{
+    public required string   ProviderId    { get; init; }
+    public string?           DisplayName   { get; init; }
+    public string?           Description   { get; init; }
+    public required string   ClientId      { get; init; }
+    public required string   ClientSecret  { get; init; }
+    public string[]?         Operations    { get; init; }
+    public int               TimeoutMs     { get; init; } = 30_000;
+    public int               Priority      { get; init; } = 5;
 }

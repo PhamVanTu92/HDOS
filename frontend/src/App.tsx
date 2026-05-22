@@ -5,6 +5,7 @@ import { Layout } from './components/Layout';
 import { Dashboard } from './pages/Dashboard';
 import { Reports } from './pages/Reports';
 import { DataManagement } from './pages/DataManagement';
+import { Admin } from './pages/Admin';
 
 // Handle the OIDC callback (silent renew / redirect back)
 function OidcCallback() {
@@ -29,6 +30,7 @@ export default function App() {
                 <Route path="/" element={<Dashboard />} />
                 <Route path="/reports" element={<Reports />} />
                 <Route path="/data" element={<DataManagement />} />
+                <Route path="/admin" element={<Admin />} />
               </Routes>
             </Layout>
           </ProtectedRoute>

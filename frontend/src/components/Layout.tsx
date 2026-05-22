@@ -2,6 +2,7 @@ import { type ReactNode, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from 'react-oidc-context';
 import { useSignalRConnection } from '../hooks/useSignalR';
+import type { User } from 'oidc-client-ts';
 
 interface NavItem {
   to: string;
@@ -33,15 +34,34 @@ function DatabaseIcon() {
   );
 }
 
+function CogIcon() {
+  return (
+    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+        d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+    </svg>
+  );
+}
+
 const NAV_ITEMS: NavItem[] = [
   { to: '/', label: 'Dashboard', icon: <BarChartIcon /> },
   { to: '/reports', label: 'Báo cáo', icon: <DocumentIcon /> },
   { to: '/data', label: 'Quản lý dữ liệu', icon: <DatabaseIcon /> },
 ];
 
+const ADMIN_NAV: NavItem = { to: '/admin', label: 'Admin', icon: <CogIcon /> };
+
+function hasAdminRole(user: User | null | undefined): boolean {
+  const profile = user?.profile as Record<string, unknown> | undefined;
+  const realmAccess = profile?.realm_access as { roles?: string[] } | undefined;
+  return realmAccess?.roles?.includes('admin') ?? false;
+}
+
 export function Layout({ children }: { children: ReactNode }) {
-  const auth = useAuth();
+  const auth        = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const isAdmin     = hasAdminRole(auth.user);
 
   // Manages the global SignalR connection lifecycle
   useSignalRConnection();
@@ -94,6 +114,31 @@ export function Layout({ children }: { children: ReactNode }) {
               {sidebarOpen && <span>{item.label}</span>}
             </NavLink>
           ))}
+
+          {/* Admin — only visible to users with 'admin' role */}
+          {isAdmin && (
+            <>
+              {sidebarOpen && (
+                <p className="mt-4 mb-1 px-4 text-xs font-semibold uppercase tracking-widest text-gray-500">
+                  Quản trị
+                </p>
+              )}
+              {!sidebarOpen && <hr className="my-3 border-gray-700" />}
+              <NavLink
+                to={ADMIN_NAV.to}
+                className={({ isActive }) =>
+                  `flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${
+                    isActive
+                      ? 'bg-brand-700 text-white'
+                      : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+                  }`
+                }
+              >
+                <span className="shrink-0">{ADMIN_NAV.icon}</span>
+                {sidebarOpen && <span>{ADMIN_NAV.label}</span>}
+              </NavLink>
+            </>
+          )}
         </nav>
 
         {/* User */}
