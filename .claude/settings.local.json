@@ -60,7 +60,12 @@
       "Bash(git commit -m 'fix\\(compose\\): add Postgres connection string + depends_on for provider-bridge *)",
       "Bash(New-Item -Path \"E:\\\\Project\\\\HDOS\\\\.env.example\" -ItemType File -Force)",
       "Bash(Out-Null)",
-      "Bash(Write-Output \"created\")"
+      "Bash(Write-Output \"created\")",
+      "Bash(mkdir -p \"E:/Project/excel-provider/proto\" \"E:/Project/excel-provider/db\" && echo \"dirs created\")",
+      "Bash(git commit *)",
+      "Bash(git rm *)",
+      "Bash(sudo docker compose logs gateway --tail=30)",
+      "Bash(xargs grep -l \"class OperationRegistration\\\\|record OperationRegistration\")"
     ]
   }
 }

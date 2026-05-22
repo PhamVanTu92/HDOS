@@ -1,3 +1,5 @@
+using System.Security.Claims;
+using System.Text.Json;
 using MassTransit;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.DataProtection;
@@ -102,6 +104,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidAudience = jwtAud,
             ValidateLifetime = true,
             ClockSkew = System.TimeSpan.FromSeconds(30),
+            RoleClaimType = ClaimTypes.Role,
         };
         o.Events = new JwtBearerEvents
         {
@@ -111,6 +114,30 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 {
                     var token = ctx.Request.Query["access_token"].ToString();
                     if (!string.IsNullOrEmpty(token)) ctx.Token = token;
+                }
+                return Task.CompletedTask;
+            },
+            OnTokenValidated = ctx =>
+            {
+                // Flatten Keycloak's nested realm_access.roles into standard role claims
+                // so [Authorize(Roles = "...")] works.
+                if (ctx.Principal?.Identity is ClaimsIdentity identity)
+                {
+                    var realmAccess = identity.FindFirst("realm_access")?.Value;
+                    if (!string.IsNullOrEmpty(realmAccess))
+                    {
+                        using var doc = JsonDocument.Parse(realmAccess);
+                        if (doc.RootElement.TryGetProperty("roles", out var roles) &&
+                            roles.ValueKind == JsonValueKind.Array)
+                        {
+                            foreach (var role in roles.EnumerateArray())
+                            {
+                                var name = role.GetString();
+                                if (!string.IsNullOrEmpty(name))
+                                    identity.AddClaim(new Claim(ClaimTypes.Role, name));
+                            }
+                        }
+                    }
                 }
                 return Task.CompletedTask;
             },
