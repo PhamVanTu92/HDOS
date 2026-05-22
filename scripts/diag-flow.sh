@@ -1,11 +1,33 @@
 #!/usr/bin/env bash
 # Chẩn đoán đường đi của 1 request qua toàn bộ pipeline.
-# Usage: TOKEN='<jwt>' ./diag-flow.sh
+# Tự lấy token qua password grant (cần Direct Access Grants bật cho hdos-web).
+#   ./diag-flow.sh                      # auto-fetch token
+#   TOKEN='<jwt>' ./diag-flow.sh        # dùng token có sẵn
 set -uo pipefail
 
 HOST="${HOST:-https://hdosfoxai.foxai.com.vn}"
-TOKEN="${TOKEN:?TOKEN required}"
+USERNAME="${USERNAME:-admin}"
+PASSWORD="${PASSWORD:-Admin123!}"
 RID=$(cat /proc/sys/kernel/random/uuid)
+
+# ── Auto-fetch token nếu chưa có ──────────────────────────────────────────
+TOKEN="${TOKEN:-}"
+if [[ -z "$TOKEN" ]]; then
+    echo "── Lấy token cho user '$USERNAME' qua password grant ──"
+    TOKEN=$(curl -s -X POST "$HOST/realms/hdos/protocol/openid-connect/token" \
+        -d "grant_type=password" \
+        -d "client_id=hdos-web" \
+        -d "username=$USERNAME" \
+        -d "password=$PASSWORD" \
+        -d "scope=openid" \
+        | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4)
+    if [[ -z "$TOKEN" ]]; then
+        echo "✗ Không lấy được token. Direct Access Grants có thể chưa bật cho hdos-web."
+        echo "  Chạy lệnh kcadm bật directAccessGrantsEnabled (xem hướng dẫn)."
+        exit 1
+    fi
+    echo "✓ Token mới (sống 15 phút)"
+fi
 
 echo "════════ STATE BEFORE SUBMIT ════════"
 echo "── q.provider consumers (excel-provider session sống?) ──"
@@ -13,10 +35,14 @@ sudo docker compose exec -T rabbitmq rabbitmqctl list_queues name messages consu
 
 echo
 echo "════════ SUBMIT requestId=$RID ════════"
-curl -s -X POST "$HOST/api/v1/requests" \
+SUBMIT_CODE=$(curl -s -o /tmp/submit-body.txt -w "%{http_code}" -X POST "$HOST/api/v1/requests" \
   -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d "{\"requestId\":\"$RID\",\"operation\":\"report.dashboard.summary\",\"params\":{},\"tenantId\":\"tenant-001\",\"userId\":\"user-admin-hdos\",\"options\":{\"priority\":\"Normal\",\"timeoutMs\":30000}}"
-echo
+  -d "{\"requestId\":\"$RID\",\"operation\":\"report.dashboard.summary\",\"params\":{},\"tenantId\":\"tenant-001\",\"userId\":\"user-admin-hdos\",\"options\":{\"priority\":\"Normal\",\"timeoutMs\":30000}}")
+echo "HTTP $SUBMIT_CODE: $(cat /tmp/submit-body.txt)"
+if [[ "$SUBMIT_CODE" == "401" ]]; then
+    echo "✗ 401 Unauthorized — token hết hạn. Lấy token mới (bỏ biến TOKEN để auto-fetch)."
+    exit 1
+fi
 
 echo
 echo "════════ +2s: QUEUE DEPTH (message kẹt ở đâu?) ════════"
