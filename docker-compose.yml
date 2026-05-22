@@ -288,6 +288,7 @@ services:
       dockerfile: Services/Provider.Bridge/Dockerfile
     environment:
       ASPNETCORE_ENVIRONMENT:  Development
+      Logging__LogLevel__ReportingPlatform__Bridge__Interceptors__JwtValidationInterceptor: Debug
       Bridge__JwksUrl:         http://request-api:5000/.well-known/jwks.json
       Bridge__GrpcUrl:         http://provider-bridge:5400
       Redis__ConnectionString:     redis:6379
