@@ -1,4 +1,4 @@
-import { apiGet, apiPost } from './client';
+import { apiGet, apiPost, apiPut } from './client';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -73,5 +73,70 @@ export function revokeCredentials(providerId: string): Promise<void> {
   return apiPost<Record<string, never>, void>(
     `/api/v1/admin/providers/${providerId}/credentials/revoke`,
     {},
+  );
+}
+
+/** Update the operations array on an existing provider. */
+export function updateProviderOperations(
+  providerId: string,
+  operations: string[],
+): Promise<ProviderInfo> {
+  return apiPut<{ operations: string[] }, ProviderInfo>(
+    `/api/v1/admin/providers/${providerId}/operations`,
+    { operations },
+  );
+}
+
+// ── Operation Registry ────────────────────────────────────────────────────────
+
+export interface OperationEntry {
+  operationPattern: string;
+  handlerType:      string;
+  providerId:       string | null;
+  paramsSchema:     unknown | null;
+  timeoutMs:        number;
+  cacheable:        boolean;
+  cacheTtlSeconds:  number;
+  idempotent:       boolean;
+  status:           'active' | 'disabled';
+}
+
+export interface AddOperationRequest {
+  operationPattern: string;
+  handlerType?:     string;
+  providerId?:      string;
+  paramsSchema?:    unknown;
+  timeoutMs?:       number;
+  cacheable?:       boolean;
+  cacheTtlSeconds?: number;
+  idempotent?:      boolean;
+}
+
+export interface UpdateOperationRequest {
+  handlerType?:     string;
+  providerId?:      string;
+  paramsSchema?:    unknown;
+  timeoutMs?:       number;
+  cacheable?:       boolean;
+  cacheTtlSeconds?: number;
+  idempotent?:      boolean;
+  status?:          'active' | 'disabled';
+}
+
+export function listOperations(): Promise<OperationEntry[]> {
+  return apiGet<OperationEntry[]>('/api/v1/admin/operations');
+}
+
+export function addOperation(req: AddOperationRequest): Promise<OperationEntry> {
+  return apiPost<AddOperationRequest, OperationEntry>('/api/v1/admin/operations', req);
+}
+
+export function updateOperation(
+  pattern: string,
+  req: UpdateOperationRequest,
+): Promise<OperationEntry> {
+  return apiPut<UpdateOperationRequest, OperationEntry>(
+    `/api/v1/admin/operations/${encodeURIComponent(pattern)}`,
+    req,
   );
 }

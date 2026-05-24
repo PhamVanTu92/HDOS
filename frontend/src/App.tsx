@@ -6,6 +6,9 @@ import { Dashboard } from './pages/Dashboard';
 import { Reports } from './pages/Reports';
 import { DataManagement } from './pages/DataManagement';
 import { Admin } from './pages/Admin';
+import { ProviderOperations } from './pages/admin/ProviderOperations';
+import { TestConsole } from './pages/admin/TestConsole';
+import { ReportDesigner } from './pages/admin/ReportDesigner';
 
 // Handle the OIDC callback (silent renew / redirect back)
 function OidcCallback() {
@@ -27,10 +30,14 @@ export default function App() {
           <ProtectedRoute>
             <Layout>
               <Routes>
-                <Route path="/" element={<Dashboard />} />
-                <Route path="/reports" element={<Reports />} />
-                <Route path="/data" element={<DataManagement />} />
-                <Route path="/admin" element={<Admin />} />
+                <Route path="/"                   element={<Dashboard />} />
+                <Route path="/reports"            element={<Reports />} />
+                <Route path="/data"               element={<DataManagement />} />
+                {/* Admin sub-pages */}
+                <Route path="/admin"              element={<Admin />} />
+                <Route path="/admin/operations"   element={<ProviderOperations />} />
+                <Route path="/admin/test"         element={<TestConsole />} />
+                <Route path="/admin/designer"     element={<ReportDesigner />} />
               </Routes>
             </Layout>
           </ProtectedRoute>

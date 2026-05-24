@@ -104,6 +104,18 @@ export async function apiPost<TBody, TResponse>(
   return handleResponse<TResponse>(res);
 }
 
+export async function apiPut<TBody, TResponse>(
+  path: string,
+  body: TBody,
+): Promise<TResponse> {
+  const res = await fetch(`${GATEWAY}${path}`, {
+    method: 'PUT',
+    headers: buildHeaders(),
+    body: JSON.stringify(body),
+  });
+  return handleResponse<TResponse>(res);
+}
+
 export async function apiDelete(path: string): Promise<void> {
   const res = await fetch(`${GATEWAY}${path}`, {
     method: 'DELETE',

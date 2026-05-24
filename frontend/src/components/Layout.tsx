@@ -5,15 +5,19 @@ import { useSignalRConnection } from '../hooks/useSignalR';
 import { hasRealmRole } from '../api/client';
 
 interface NavItem {
-  to: string;
+  to:    string;
   label: string;
-  icon: ReactNode;
+  icon:  ReactNode;
+  end?:  boolean;
 }
+
+// ── Icons ─────────────────────────────────────────────────────────────────────
 
 function BarChartIcon() {
   return (
     <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+        d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
     </svg>
   );
 }
@@ -21,7 +25,8 @@ function BarChartIcon() {
 function DocumentIcon() {
   return (
     <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+        d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
     </svg>
   );
 }
@@ -29,7 +34,8 @@ function DocumentIcon() {
 function DatabaseIcon() {
   return (
     <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7c0-1.657 3.582-3 8-3s8 1.343 8 3M4 7v5c0 1.657 3.582 3 8 3s8-1.343 8-3V7M4 7c0 1.657 3.582 3 8 3s8-1.343 8-3m0 10v-5" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+        d="M4 7c0-1.657 3.582-3 8-3s8 1.343 8 3M4 7v5c0 1.657 3.582 3 8 3s8-1.343 8-3V7M4 7c0 1.657 3.582 3 8 3s8-1.343 8-3m0 10v-5" />
     </svg>
   );
 }
@@ -44,18 +50,77 @@ function CogIcon() {
   );
 }
 
+function ListIcon() {
+  return (
+    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+        d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+    </svg>
+  );
+}
+
+function TerminalIcon() {
+  return (
+    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+        d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+    </svg>
+  );
+}
+
+function PencilIcon() {
+  return (
+    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+        d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+    </svg>
+  );
+}
+
+// ── Nav items ─────────────────────────────────────────────────────────────────
+
 const NAV_ITEMS: NavItem[] = [
-  { to: '/', label: 'Dashboard', icon: <BarChartIcon /> },
-  { to: '/reports', label: 'Báo cáo', icon: <DocumentIcon /> },
-  { to: '/data', label: 'Quản lý dữ liệu', icon: <DatabaseIcon /> },
+  { to: '/',        label: 'Dashboard',         icon: <BarChartIcon />, end: true },
+  { to: '/reports', label: 'Báo cáo',            icon: <DocumentIcon /> },
+  { to: '/data',    label: 'Quản lý dữ liệu',   icon: <DatabaseIcon /> },
 ];
 
-const ADMIN_NAV: NavItem = { to: '/admin', label: 'Admin', icon: <CogIcon /> };
+const ADMIN_ITEMS: NavItem[] = [
+  { to: '/admin',            label: 'Quản trị Provider',   icon: <CogIcon />,      end: true },
+  { to: '/admin/operations', label: 'Quản lý Operations',  icon: <ListIcon /> },
+  { to: '/admin/test',       label: 'Test Console',         icon: <TerminalIcon /> },
+  { to: '/admin/designer',   label: 'Thiết kế Báo cáo',   icon: <PencilIcon /> },
+];
+
+// ── Sub-nav item (indented) ───────────────────────────────────────────────────
+
+function SubNavLink({ item, open }: { item: NavItem; open: boolean }) {
+  return (
+    <NavLink
+      to={item.to}
+      end={item.end}
+      className={({ isActive }) =>
+        `flex items-center gap-3 py-2 text-sm transition-colors ${
+          open ? 'pl-8 pr-4' : 'px-4'
+        } ${
+          isActive
+            ? 'bg-brand-700 text-white'
+            : 'text-gray-400 hover:bg-gray-800 hover:text-white'
+        }`
+      }
+    >
+      <span className="shrink-0 opacity-80">{item.icon}</span>
+      {open && <span className="truncate">{item.label}</span>}
+    </NavLink>
+  );
+}
+
+// ── Layout ────────────────────────────────────────────────────────────────────
 
 export function Layout({ children }: { children: ReactNode }) {
-  const auth        = useAuth();
+  const auth          = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const isAdmin     = hasRealmRole('admin');
+  const isAdmin       = hasRealmRole('admin');
 
   // Manages the global SignalR connection lifecycle
   useSignalRConnection();
@@ -83,19 +148,18 @@ export function Layout({ children }: { children: ReactNode }) {
             HD
           </div>
           {sidebarOpen && (
-            <span className="text-sm font-semibold truncate">
-              HDOS Reporting
-            </span>
+            <span className="text-sm font-semibold truncate">HDOS Reporting</span>
           )}
         </div>
 
         {/* Nav */}
         <nav className="flex-1 overflow-y-auto py-4">
+          {/* Main items */}
           {NAV_ITEMS.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
-              end={item.to === '/'}
+              end={item.end}
               className={({ isActive }) =>
                 `flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${
                   isActive
@@ -109,17 +173,21 @@ export function Layout({ children }: { children: ReactNode }) {
             </NavLink>
           ))}
 
-          {/* Admin — only visible to users with 'admin' role */}
+          {/* Admin section — only visible to admins */}
           {isAdmin && (
             <>
-              {sidebarOpen && (
+              {sidebarOpen ? (
                 <p className="mt-4 mb-1 px-4 text-xs font-semibold uppercase tracking-widest text-gray-500">
                   Quản trị
                 </p>
+              ) : (
+                <hr className="my-3 border-gray-700" />
               )}
-              {!sidebarOpen && <hr className="my-3 border-gray-700" />}
+
+              {/* First item: Provider management (top-level icon) */}
               <NavLink
-                to={ADMIN_NAV.to}
+                to="/admin"
+                end
                 className={({ isActive }) =>
                   `flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${
                     isActive
@@ -128,9 +196,14 @@ export function Layout({ children }: { children: ReactNode }) {
                   }`
                 }
               >
-                <span className="shrink-0">{ADMIN_NAV.icon}</span>
-                {sidebarOpen && <span>{ADMIN_NAV.label}</span>}
+                <span className="shrink-0"><CogIcon /></span>
+                {sidebarOpen && <span>Quản trị Provider</span>}
               </NavLink>
+
+              {/* Sub-items — always visible; indented when sidebar open, icons when collapsed */}
+              <SubNavLink item={ADMIN_ITEMS[1]} open={sidebarOpen} />
+              <SubNavLink item={ADMIN_ITEMS[2]} open={sidebarOpen} />
+              <SubNavLink item={ADMIN_ITEMS[3]} open={sidebarOpen} />
             </>
           )}
         </nav>
