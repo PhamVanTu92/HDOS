@@ -59,13 +59,16 @@ export function useDashboard() {
   );
 
   // ── Primary: terminal result straight from the SignalR push ──────────────────
+  // enabled: true — always registered so no event is missed when the push
+  // arrives before the next render cycle (cache-hit race condition).
+  // handlerRef keeps the requestId check current without re-subscribing.
   useSignalREvent(
     'RequestCompleted',
     (payload) => {
       if (payload.requestId === requestId)
         setPushed(mapPushToResult<DashboardSummary>(payload));
     },
-    !!requestId,
+    true,
   );
   useSignalREvent(
     'RequestFailed',
@@ -73,7 +76,7 @@ export function useDashboard() {
       if (payload.requestId === requestId)
         setPushed(mapPushToResult<DashboardSummary>(payload));
     },
-    !!requestId,
+    true,
   );
 
   // ── Fallback: poll GET only until a result arrives (missed push on reconnect) ──

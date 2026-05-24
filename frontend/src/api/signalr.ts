@@ -131,6 +131,12 @@ class SignalRClient {
 
     await this.connection.start();
     console.info('[SignalR] Connected');
+
+    // Re-subscribe any widget channels that were registered before the
+    // connection was established (e.g. useWidgetSubscription called during mount
+    // before connect() finished).  onreconnected handles subsequent reconnects;
+    // this call handles the first successful connection.
+    await this.resubscribeChannels();
   }
 
   /**

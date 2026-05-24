@@ -71,13 +71,15 @@ export function useSalesTrend() {
   );
 
   // ── Primary: terminal result from SignalR push ─────────────────────────────
+  // enabled: true — always registered so no event is missed when the push
+  // arrives before the next render cycle (cache-hit race condition).
   useSignalREvent(
     'RequestCompleted',
     (payload) => {
       if (payload.requestId === requestId)
         setPushed(mapPushToResult<SalesTrend>(payload));
     },
-    !!requestId,
+    true,
   );
   useSignalREvent(
     'RequestFailed',
@@ -85,7 +87,7 @@ export function useSalesTrend() {
       if (payload.requestId === requestId)
         setPushed(mapPushToResult<SalesTrend>(payload));
     },
-    !!requestId,
+    true,
   );
 
   // ── Fallback: GET polling until push arrives ───────────────────────────────
