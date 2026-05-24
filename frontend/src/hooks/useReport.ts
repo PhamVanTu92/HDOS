@@ -52,19 +52,23 @@ export function useReport<T = unknown>(opts: UseReportOptions = {}) {
   );
 
   // ── Primary path: consume the terminal result straight from the SignalR push ──
+  // enabled: true — always registered so no event is missed when the push
+  // arrives before the next render cycle (cache-hit race condition).
+  // handlerRef in useSignalREvent keeps the requestId check current without
+  // re-subscribing on every render.
   useSignalREvent(
     'RequestCompleted',
     (payload) => {
       if (payload.requestId === requestId) setPushed(mapPushToResult<T>(payload));
     },
-    !!requestId,
+    true,
   );
   useSignalREvent(
     'RequestFailed',
     (payload) => {
       if (payload.requestId === requestId) setPushed(mapPushToResult<T>(payload));
     },
-    !!requestId,
+    true,
   );
 
   // ── Fallback: poll GET only until a result arrives (covers a missed push on
