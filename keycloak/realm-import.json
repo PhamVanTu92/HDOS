@@ -344,6 +344,16 @@
           }
         }
       ]
+    },
+    {
+      "id": "scope-ingestion",
+      "name": "ingestion",
+      "description": "Grants access to the Ingestion API — required by IngestionScope policy",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false"
+      }
     }
   ],
   "clients": [
@@ -441,13 +451,32 @@
         "roles",
         "profile",
         "basic",
-        "email"
+        "email",
+        "ingestion",
+        "reporting-platform-audience"
       ],
       "optionalClientScopes": [
         "address",
         "phone",
         "offline_access",
         "microprofile-jwt"
+      ],
+      "protocolMappers": [
+        {
+          "id": "mapper-ingestion-tenant-id",
+          "name": "tenant_id-hardcoded",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "tenant_id",
+            "claim.value": "tenant-001",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "false"
+          }
+        }
       ]
     }
   ],
