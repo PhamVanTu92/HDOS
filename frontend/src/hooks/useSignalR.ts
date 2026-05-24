@@ -10,12 +10,40 @@ import {
  * Connects to the SignalR hub when the user is authenticated
  * and disconnects on logout / unmount.
  *
- * Call this once at a high level in the component tree (e.g. Layout).
+ * Also handles proactive token-aware reconnection:
+ *   - oidc-client-ts fires `userLoaded` after every silent token renewal.
+ *   - On that event we explicitly reconnect SignalR so the hub receives
+ *     a fresh JWT before the old one expires, avoiding a transient 401
+ *     that would otherwise force an unplanned auto-reconnect cycle.
+ *
+ * Call this ONCE at a high level in the component tree (e.g. Layout).
  */
 export function useSignalRConnection() {
   const auth = useAuth();
   const connected = useRef(false);
 
+  // ── Token auto-refresh: reconnect SignalR when Keycloak renews the token ──
+  useEffect(() => {
+    /**
+     * Fired by oidc-client-ts after every successful silent renewal.
+     * At this point sessionStorage already contains the new access_token,
+     * so signalRClient.reconnect() picks it up via accessTokenFactory.
+     */
+    const onUserLoaded = () => {
+      // Skip if we haven't established the first connection yet.
+      if (!connected.current) return;
+      signalRClient.reconnect().catch((err) => {
+        console.warn('[SignalR] Reconnect after token refresh failed:', err);
+      });
+    };
+
+    auth.events.addUserLoaded(onUserLoaded);
+    return () => {
+      auth.events.removeUserLoaded(onUserLoaded);
+    };
+  }, [auth.events]);
+
+  // ── SignalR connection lifecycle ───────────────────────────────────────────
   useEffect(() => {
     if (!auth.isAuthenticated || connected.current) return;
 

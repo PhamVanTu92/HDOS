@@ -59,16 +59,36 @@ class SignalRClient {
   private handlers = new Map<string, Set<AnyHandler>>();
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
+  /**
+   * Channels that have been subscribed via SubscribeWidget.
+   * Persisted across reconnections so we can re-invoke SubscribeWidget
+   * after each auto-reconnect or explicit token-triggered reconnect.
+   */
+  private subscribedChannels = new Set<string>();
+
   private buildConnection(): HubConnection {
     return new HubConnectionBuilder()
       .withUrl(`${GATEWAY}/hubs/main`, {
         // Reads from sessionStorage at negotiation time — always fresh.
+        // After a silent token renewal the new token is in sessionStorage
+        // before this factory is called, so reconnects always get a valid JWT.
         accessTokenFactory: () => getAccessToken(),
       })
       .withHubProtocol(new MessagePackHubProtocol())
       .withAutomaticReconnect([0, 2000, 5000, 10000, 30000])
       .configureLogging(LogLevel.Warning)
       .build();
+  }
+
+  /** Re-invoke SubscribeWidget for every tracked channel. */
+  private async resubscribeChannels(): Promise<void> {
+    for (const ch of this.subscribedChannels) {
+      try {
+        await this.connection?.invoke('SubscribeWidget', ch);
+      } catch (err) {
+        console.warn(`[SignalR] Failed to re-subscribe channel "${ch}":`, err);
+      }
+    }
   }
 
   async connect(): Promise<void> {
@@ -86,7 +106,7 @@ class SignalRClient {
 
     this.connection = this.buildConnection();
 
-    // Re-register all current handlers on the new connection instance
+    // Re-register all current handlers on the new connection instance.
     this.handlers.forEach((set, event) => {
       set.forEach((handler) => {
         this.connection!.on(event, handler);
@@ -101,12 +121,38 @@ class SignalRClient {
       console.info('[SignalR] Reconnecting…');
     });
 
-    this.connection.onreconnected(() => {
-      console.info('[SignalR] Reconnected');
+    // After an auto-reconnect the server drops all group memberships.
+    // Re-subscribe every tracked widget channel so WidgetStale events
+    // keep flowing without any component needing to know about reconnects.
+    this.connection.onreconnected(async () => {
+      console.info('[SignalR] Reconnected — re-subscribing widget channels');
+      await this.resubscribeChannels();
     });
 
     await this.connection.start();
     console.info('[SignalR] Connected');
+  }
+
+  /**
+   * Explicitly disconnect, then reconnect with a fresh JWT.
+   * Called by useSignalRConnection after a silent token renewal so the hub
+   * receives a valid token without waiting for the old one to expire.
+   */
+  async reconnect(): Promise<void> {
+    if (
+      this.connection &&
+      this.connection.state !== HubConnectionState.Disconnected
+    ) {
+      await this.connection.stop();
+    }
+    this.connection = null;
+
+    await this.connect();
+
+    // connect() does not trigger onreconnected, so re-subscribe manually.
+    await this.resubscribeChannels();
+
+    console.info('[SignalR] Reconnected with refreshed token');
   }
 
   async disconnect(): Promise<void> {
@@ -134,12 +180,14 @@ class SignalRClient {
   }
 
   async subscribeWidget(channel: string): Promise<void> {
+    this.subscribedChannels.add(channel);
     if (this.connection?.state === HubConnectionState.Connected) {
       await this.connection.invoke('SubscribeWidget', channel);
     }
   }
 
   async unsubscribeWidget(channel: string): Promise<void> {
+    this.subscribedChannels.delete(channel);
     if (this.connection?.state === HubConnectionState.Connected) {
       await this.connection.invoke('UnsubscribeWidget', channel);
     }
