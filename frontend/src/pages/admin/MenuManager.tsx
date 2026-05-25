@@ -12,61 +12,11 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { apiGet, apiPost, apiPut, apiDelete } from '../../api/client';
+import { listOperations } from '../../api/admin';
+import type { OperationEntry } from '../../api/admin';
 import type {
   AdminMenuNode, AdminScreen, AdminPermission, WidgetDef,
 } from '../../types/menuTypes';
-
-// ── Data source registry ───────────────────────────────────────────────────────
-
-interface DsField { k: string; t: 'num' | 'str' | 'date'; l: string }
-interface DsInfo {
-  label: string; type: 'SQL' | 'Excel' | 'gRPC'; provider: string;
-  fields: DsField[]; compat: string[];
-  preview: Record<string, unknown>;
-}
-
-const DS: Record<string, DsInfo> = {
-  'sql.sales_monthly': {
-    label:'Doanh thu theo tháng', type:'SQL', provider:'request-api',
-    fields:[{k:'month',t:'date',l:'Tháng'},{k:'revenue',t:'num',l:'Doanh thu (triệu)'},{k:'target',t:'num',l:'Mục tiêu'},{k:'growth_pct',t:'num',l:'Tăng trưởng %'}],
-    compat:['line','bar'], preview:{lbs:['T1','T2','T3','T4','T5','T6','T7','T8','T9','T10','T11','T12'],vals:[320,410,380,450,420,510,480,560,530,610,580,650]},
-  },
-  'sql.top_products': {
-    label:'Top sản phẩm', type:'SQL', provider:'request-api',
-    fields:[{k:'product_name',t:'str',l:'Sản phẩm'},{k:'revenue',t:'num',l:'Doanh thu'},{k:'quantity',t:'num',l:'Số lượng'},{k:'category',t:'str',l:'Danh mục'}],
-    compat:['bar','table','pie'], preview:{rows:[['SP Alu 6061',920],['SP Thép CT3',780],['SP Nhựa PP',650],['SP Inox 304',540],['SP Đồng ĐC',410]]},
-  },
-  'sql.kpi_summary': {
-    label:'KPI tổng hợp', type:'SQL', provider:'request-api',
-    fields:[{k:'total_revenue',t:'num',l:'Tổng doanh thu'},{k:'growth_pct',t:'num',l:'Tăng trưởng %'},{k:'order_count',t:'num',l:'Số đơn hàng'},{k:'avg_order',t:'num',l:'Giá trị TB/đơn'}],
-    compat:['kpi'], preview:{val:'2.47 tỷ', trend:'+18.4%', lbl:'Tổng doanh thu 2025'},
-  },
-  'sql.orders_recent': {
-    label:'Đơn hàng gần đây', type:'SQL', provider:'request-api',
-    fields:[{k:'order_id',t:'str',l:'Mã đơn'},{k:'customer',t:'str',l:'Khách hàng'},{k:'product',t:'str',l:'Sản phẩm'},{k:'amount',t:'num',l:'Giá trị'},{k:'date',t:'date',l:'Ngày'},{k:'status',t:'str',l:'Trạng thái'}],
-    compat:['table'], preview:{cols:['Mã đơn','Khách hàng','Giá trị','Trạng thái'],rows:[['ORD-001','Cty ABC','120M','✅'],['ORD-002','Cty XYZ','85M','🚚'],['ORD-003','DN 123','64M','✅']]},
-  },
-  'sql.regional_stats': {
-    label:'Thống kê vùng', type:'SQL', provider:'request-api',
-    fields:[{k:'region',t:'str',l:'Vùng'},{k:'revenue',t:'num',l:'Doanh thu'},{k:'orders',t:'num',l:'Đơn hàng'},{k:'customers',t:'num',l:'Khách hàng'}],
-    compat:['bar','table','pie'], preview:{rows:[['Miền Bắc',820],['Miền Trung',450],['Miền Nam',930],['Tây Nguyên',210]]},
-  },
-  'excel.sales_dashboard': {
-    label:'Excel: Sales Dashboard', type:'Excel', provider:'excel-provider',
-    fields:[{k:'month',t:'date',l:'Tháng'},{k:'revenue',t:'num',l:'Doanh thu'},{k:'product',t:'str',l:'Sản phẩm'},{k:'quantity',t:'num',l:'Số lượng'},{k:'region',t:'str',l:'Vùng'}],
-    compat:['line','bar','table','kpi','pie'], preview:{lbs:['T1','T2','T3','T4','T5','T6'],vals:[280,350,310,420,390,480]},
-  },
-  'ml.fraud.score': {
-    label:'ML: Fraud Score', type:'gRPC', provider:'dotnet-provider',
-    fields:[{k:'transactionId',t:'str',l:'Transaction ID'},{k:'score',t:'num',l:'Fraud Score'},{k:'riskBand',t:'str',l:'Mức độ rủi ro'},{k:'modelVersion',t:'str',l:'Model version'}],
-    compat:['kpi','table'], preview:{val:'0.234', trend:'LOW RISK', lbl:'Fraud Score trung bình'},
-  },
-  'ml.fraud.batchScore': {
-    label:'ML: Batch Fraud Score', type:'gRPC', provider:'dotnet-provider',
-    fields:[{k:'transactionId',t:'str',l:'Transaction ID'},{k:'score',t:'num',l:'Fraud Score'},{k:'riskBand',t:'str',l:'Rủi ro'}],
-    compat:['bar','table'], preview:{rows:[['TXN-001',0.12,'LOW'],['TXN-002',0.67,'HIGH'],['TXN-003',0.34,'MED']]},
-  },
-};
 
 const ICONS = ['📊','📈','📉','📋','📌','🗃️','⚙️','✅','🛡️','🏭','💼','🎯','🔍','📁','🌐','⭐'];
 const COLORS = ['#4f46e5','#0ea5e9','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#f97316'];
@@ -86,29 +36,28 @@ const uid = () => 'w' + Date.now() + Math.random().toString(36).slice(2, 5);
 const slugify = (s: string) =>
   s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
    .replace(/đ/g, 'd').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-const dsCls = (t: string) => t === 'SQL' ? 'bg-sky-100 text-sky-700' : t === 'Excel' ? 'bg-green-100 text-green-700' : 'bg-purple-100 text-purple-700';
-const ftCls = (t: string) => t === 'num' ? 'bg-sky-100 text-sky-700' : t === 'date' ? 'bg-green-100 text-green-700' : 'bg-purple-100 text-purple-700';
 const defaultSpan = (t: string) => ({ kpi:4, line:8, bar:6, pie:4, table:12, text:6 }[t] ?? 6);
 const defaultTitle = (t: string) => ({ kpi:'KPI Card', line:'Line Chart', bar:'Bar Chart', pie:'Pie Chart', table:'Bảng dữ liệu', text:'Văn bản' }[t] ?? 'Widget');
 
 // ── WidgetPreview ──────────────────────────────────────────────────────────────
 
+// Static preview data used in the designer canvas (design-time only, not real data)
+const PREVIEW_LINE_VALS = [40,60,50,80,70,90,85,100];
+const PREVIEW_BAR_ROWS: [string,number][] = [['A',80],['B',65],['C',50],['D',42]];
+const PREVIEW_PIE_ROWS: [string,number][] = [['A',40],['B',30],['C',20],['D',10]];
+
 function WidgetPreview({ wg }: { wg: DesignerWidget }) {
-  const ds = DS[wg.ds];
   switch (wg.type) {
-    case 'kpi': {
-      const p = (ds?.preview ?? {}) as { val?: string; trend?: string; lbl?: string };
+    case 'kpi':
       return (
         <div>
-          <div className="text-2xl font-black" style={{ color: wg.color }}>{p.val ?? '—'}</div>
-          <div className="text-xs text-gray-400 mt-0.5">{p.lbl ?? wg.title}</div>
-          {p.trend && <div className="text-xs mt-1" style={{ color: wg.color }}>▲ {p.trend}</div>}
+          <div className="text-2xl font-black" style={{ color: wg.color }}>—</div>
+          <div className="text-xs text-gray-400 mt-0.5">{wg.title}</div>
+          <div className="text-xs mt-1 text-gray-300">▲ dữ liệu thực khi chạy</div>
         </div>
       );
-    }
     case 'line': {
-      const p = (ds?.preview ?? {}) as { vals?: number[] };
-      const vals = p.vals ?? [40,60,50,80,70,90,85,100];
+      const vals = PREVIEW_LINE_VALS;
       const mx = Math.max(...vals), mn = Math.min(...vals);
       const pts = vals.map((v,i) => `${(i/(vals.length-1))*290+5},${65-((v-mn)/(mx-mn||1))*55}`).join(' ');
       return (
@@ -123,8 +72,7 @@ function WidgetPreview({ wg }: { wg: DesignerWidget }) {
       );
     }
     case 'bar': {
-      const p = (ds?.preview ?? {}) as { rows?: [string, number][] };
-      const rows = (p.rows ?? [['A',80],['B',65],['C',50]]).slice(0,4) as [string,number][];
+      const rows = PREVIEW_BAR_ROWS;
       const mx = Math.max(...rows.map(r => r[1]));
       return (
         <div className="flex flex-col gap-1 mt-1">
@@ -134,39 +82,34 @@ function WidgetPreview({ wg }: { wg: DesignerWidget }) {
               <div className="flex-1 bg-gray-100 rounded h-2">
                 <div className="h-full rounded" style={{ width: `${v/mx*100}%`, background: wg.color }} />
               </div>
-              <span className="w-6 text-gray-500">{v}</span>
             </div>
           ))}
         </div>
       );
     }
     case 'pie': {
-      const p = (ds?.preview ?? {}) as { rows?: [string, number][] };
-      const rows = (p.rows ?? [['A',40],['B',30],['C',20],['D',10]]).slice(0,4) as [string,number][];
+      const rows = PREVIEW_PIE_ROWS;
       const total = rows.reduce((s,r) => s+r[1], 0);
       let off = 0;
       const segs = rows.map(([,v],i) => {
-        const d = v/total*283; const seg = <circle key={i} cx="60" cy="60" r="45" fill="none" stroke={COLORS[i]} strokeWidth="20" strokeDasharray={`${d} ${283-d}`} strokeDashoffset={-off} transform="rotate(-90 60 60)"/>;
+        const d = v/total*283;
+        const seg = <circle key={i} cx="60" cy="60" r="45" fill="none" stroke={COLORS[i]}
+          strokeWidth="20" strokeDasharray={`${d} ${283-d}`} strokeDashoffset={-off} transform="rotate(-90 60 60)"/>;
         off += d; return seg;
       });
       return (
         <svg viewBox="0 0 120 120" className="w-full" style={{maxHeight:80}}>
           {segs}<circle cx="60" cy="60" r="30" fill="white"/>
-          <text x="60" y="65" textAnchor="middle" fill="#374151" fontSize="9" fontWeight="700">{rows[0][0]}: {(rows[0][1]/total*100).toFixed(0)}%</text>
         </svg>
       );
     }
-    case 'table': {
-      const p = (ds?.preview ?? {}) as { cols?: string[]; rows?: unknown[][] };
-      const cols = p.cols ?? ['Col 1','Col 2','Col 3'];
-      const rows = (p.rows ?? [['—','—','—'],['—','—','—']]).slice(0,3) as unknown[][];
+    case 'table':
       return (
         <table className="w-full text-[10px]">
-          <thead><tr>{cols.map(c => <th key={c} className="text-left px-1 py-0.5 text-gray-400 border-b border-gray-100">{c}</th>)}</tr></thead>
-          <tbody>{rows.map((r,i) => <tr key={i}>{(r as string[]).map((c,j) => <td key={j} className="px-1 py-0.5 text-gray-500">{String(c)}</td>)}</tr>)}</tbody>
+          <thead><tr>{['Col 1','Col 2','Col 3'].map(c => <th key={c} className="text-left px-1 py-0.5 text-gray-400 border-b border-gray-100">{c}</th>)}</tr></thead>
+          <tbody>{[0,1].map(i => <tr key={i}><td className="px-1 py-0.5 text-gray-300">—</td><td className="px-1 py-0.5 text-gray-300">—</td><td className="px-1 py-0.5 text-gray-300">—</td></tr>)}</tbody>
         </table>
       );
-    }
     case 'text':
       return <p className="text-xs text-gray-400 italic">Văn bản tự do — tiêu đề, chú thích…</p>;
     default: return null;
@@ -175,21 +118,79 @@ function WidgetPreview({ wg }: { wg: DesignerWidget }) {
 
 // ── ConfigPanel ────────────────────────────────────────────────────────────────
 
+// ── Helper: group operations by provider ──────────────────────────────────────
+
+function groupByProvider(ops: OperationEntry[]): Map<string, OperationEntry[]> {
+  const m = new Map<string, OperationEntry[]>();
+  for (const op of ops) {
+    const key = op.providerId ?? '(no provider)';
+    if (!m.has(key)) m.set(key, []);
+    m.get(key)!.push(op);
+  }
+  return m;
+}
+
+// ── OperationSelect — reusable across palette + config panel ──────────────────
+
+function OperationSelect({
+  value, onChange, operations, loading, className = '',
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  operations: OperationEntry[];
+  loading: boolean;
+  className?: string;
+}) {
+  const grouped = groupByProvider(operations.filter(o => o.status === 'active'));
+  return (
+    <select
+      value={value}
+      onChange={e => onChange(e.target.value)}
+      disabled={loading}
+      className={`rounded border border-gray-200 bg-white focus:border-brand-400 focus:outline-none disabled:opacity-60 ${className}`}
+    >
+      <option value="">{loading ? 'Đang tải…' : '-- Chọn operation --'}</option>
+      {Array.from(grouped.entries()).map(([provider, ops]) => (
+        <optgroup key={provider} label={provider}>
+          {ops.map(op => (
+            <option key={op.operationPattern} value={op.operationPattern}>
+              {op.operationPattern}
+            </option>
+          ))}
+        </optgroup>
+      ))}
+    </select>
+  );
+}
+
+// ── ConfigPanel ────────────────────────────────────────────────────────────────
+
 function ConfigPanel({
-  wg, onUpdate, onDelete,
+  wg, operations, opsLoading, onUpdate, onDelete,
 }: {
   wg: DesignerWidget;
+  operations: OperationEntry[];
+  opsLoading: boolean;
   onUpdate: (patch: Partial<DesignerWidget>) => void;
   onDelete: () => void;
 }) {
-  const ds = DS[wg.ds];
-  const numFields = ds?.fields.filter(f => f.t === 'num') ?? [];
-  const allFields = ds?.fields ?? [];
+  const inp = (lbl: string, val: string | undefined, key: keyof DesignerWidget, ph = '') => (
+    <div>
+      <label className="text-[10px] text-gray-400 font-medium block mb-1">{lbl}</label>
+      <input
+        value={val ?? ''}
+        onChange={e => onUpdate({ [key]: e.target.value })}
+        placeholder={ph}
+        className="w-full text-xs rounded border border-gray-200 px-2 py-1.5 focus:border-brand-400 focus:outline-none font-mono"
+      />
+    </div>
+  );
 
   return (
     <div className="flex flex-col h-full">
       <div className="p-3 border-b border-gray-100 text-xs font-semibold text-gray-500">⚙️ Cấu hình widget</div>
       <div className="flex-1 overflow-y-auto p-3 space-y-3">
+
         {/* Title */}
         <div>
           <label className="text-[10px] text-gray-400 font-medium block mb-1">Tiêu đề</label>
@@ -197,100 +198,52 @@ function ConfigPanel({
             className="w-full text-xs rounded border border-gray-200 px-2 py-1.5 focus:border-brand-400 focus:outline-none"/>
         </div>
 
-        {/* Data source */}
+        {/* Operation (data source) */}
         <div>
-          <label className="text-[10px] text-gray-400 font-medium block mb-1">Nguồn dữ liệu</label>
-          {ds && <span className={`inline-block text-[9px] rounded px-1.5 py-0.5 font-semibold mb-1 ${dsCls(ds.type)}`}>{ds.type} · {ds.provider}</span>}
-          <select value={wg.ds} onChange={e => onUpdate({ ds: e.target.value, xField:'', yField:'', valField:'', trendField:'', catField:'', cols:[] })}
-            className="w-full text-xs rounded border border-gray-200 px-2 py-1.5 focus:border-brand-400 focus:outline-none bg-white">
-            <option value="">-- Chọn data source --</option>
-            <optgroup label="SQL Provider">
-              {['sql.sales_monthly','sql.top_products','sql.kpi_summary','sql.orders_recent','sql.regional_stats'].map(k => <option key={k} value={k}>{DS[k].label}</option>)}
-            </optgroup>
-            <optgroup label="Excel Provider"><option value="excel.sales_dashboard">{DS['excel.sales_dashboard'].label}</option></optgroup>
-            <optgroup label="ML Provider (gRPC)">
-              {['ml.fraud.score','ml.fraud.batchScore'].map(k => <option key={k} value={k}>{DS[k].label}</option>)}
-            </optgroup>
-          </select>
+          <label className="text-[10px] text-gray-400 font-medium block mb-1">Operation</label>
+          <OperationSelect
+            value={wg.ds}
+            onChange={v => onUpdate({ ds: v, xField:'', yField:'', valField:'', trendField:'', catField:'', cols:[] })}
+            operations={operations}
+            loading={opsLoading}
+            className="w-full text-xs px-2 py-1.5"
+          />
+          {wg.ds && (
+            <p className="mt-1 text-[9px] font-mono text-gray-400 truncate">{wg.ds}</p>
+          )}
         </div>
 
-        {/* Field config by type */}
-        {ds && (wg.type === 'kpi') && (
+        {/* Field mappings — shown only when an operation is selected */}
+        {wg.ds && wg.type === 'kpi' && (
           <>
-            <div>
-              <label className="text-[10px] text-gray-400 font-medium block mb-1">Giá trị chính</label>
-              <select value={wg.valField ?? ''} onChange={e => onUpdate({ valField: e.target.value })}
-                className="w-full text-xs rounded border border-gray-200 px-2 py-1.5 bg-white focus:border-brand-400 focus:outline-none">
-                <option value="">-- chọn field --</option>
-                {numFields.map(f => <option key={f.k} value={f.k}>{f.l}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="text-[10px] text-gray-400 font-medium block mb-1">Xu hướng</label>
-              <select value={wg.trendField ?? ''} onChange={e => onUpdate({ trendField: e.target.value })}
-                className="w-full text-xs rounded border border-gray-200 px-2 py-1.5 bg-white focus:border-brand-400 focus:outline-none">
-                <option value="">-- chọn field --</option>
-                {allFields.map(f => <option key={f.k} value={f.k}>{f.l}</option>)}
-              </select>
-            </div>
+            {inp('Field giá trị chính', wg.valField, 'valField', 'vd: value, total')}
+            {inp('Field xu hướng', wg.trendField, 'trendField', 'vd: trend, growth')}
           </>
         )}
-        {ds && (wg.type === 'line' || wg.type === 'bar') && (
+        {wg.ds && (wg.type === 'line' || wg.type === 'bar') && (
           <>
-            <div>
-              <label className="text-[10px] text-gray-400 font-medium block mb-1">Trục X (danh mục)</label>
-              <select value={wg.xField ?? ''} onChange={e => onUpdate({ xField: e.target.value })}
-                className="w-full text-xs rounded border border-gray-200 px-2 py-1.5 bg-white focus:border-brand-400 focus:outline-none">
-                <option value="">-- chọn field --</option>
-                {allFields.map(f => <option key={f.k} value={f.k}>{f.l}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="text-[10px] text-gray-400 font-medium block mb-1">Trục Y (giá trị)</label>
-              <select value={wg.yField ?? ''} onChange={e => onUpdate({ yField: e.target.value })}
-                className="w-full text-xs rounded border border-gray-200 px-2 py-1.5 bg-white focus:border-brand-400 focus:outline-none">
-                <option value="">-- chọn field --</option>
-                {numFields.map(f => <option key={f.k} value={f.k}>{f.l}</option>)}
-              </select>
-            </div>
+            {inp('Field trục X (nhãn)', wg.xField, 'xField', 'vd: month, date, name')}
+            {inp('Field trục Y (số)', wg.yField, 'yField', 'vd: revenue, value')}
           </>
         )}
-        {ds && wg.type === 'table' && (
+        {wg.ds && wg.type === 'pie' && (
+          <>
+            {inp('Field danh mục', wg.catField, 'catField', 'vd: region, category')}
+            {inp('Field giá trị', wg.valField, 'valField', 'vd: revenue, count')}
+          </>
+        )}
+        {wg.ds && wg.type === 'table' && (
           <div>
-            <label className="text-[10px] text-gray-400 font-medium block mb-1">Cột hiển thị</label>
-            <div className="space-y-1">
-              {allFields.map(f => {
-                const sel = wg.cols?.includes(f.k) ?? false;
-                return (
-                  <div key={f.k} onClick={() => { const c = wg.cols ?? []; onUpdate({ cols: sel ? c.filter(k => k !== f.k) : [...c, f.k] }); }}
-                    className={`flex items-center gap-2 rounded border px-2 py-1 cursor-pointer transition-colors ${sel ? 'border-brand-300 bg-brand-50' : 'border-gray-200 hover:border-brand-200'}`}>
-                    <span className="font-mono text-[10px] flex-1 text-gray-600">{f.k}</span>
-                    <span className={`text-[9px] px-1 rounded ${ftCls(f.t)}`}>{f.t}</span>
-                  </div>
-                );
-              })}
-            </div>
+            <label className="text-[10px] text-gray-400 font-medium block mb-1">
+              Cột hiển thị <span className="text-gray-300">(cách nhau bằng dấu phẩy)</span>
+            </label>
+            <input
+              value={(wg.cols ?? []).join(',')}
+              onChange={e => onUpdate({ cols: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })}
+              placeholder="col1,col2,col3"
+              className="w-full text-xs rounded border border-gray-200 px-2 py-1.5 focus:border-brand-400 focus:outline-none font-mono"
+            />
           </div>
-        )}
-        {ds && wg.type === 'pie' && (
-          <>
-            <div>
-              <label className="text-[10px] text-gray-400 font-medium block mb-1">Danh mục</label>
-              <select value={wg.catField ?? ''} onChange={e => onUpdate({ catField: e.target.value })}
-                className="w-full text-xs rounded border border-gray-200 px-2 py-1.5 bg-white focus:border-brand-400 focus:outline-none">
-                <option value="">-- chọn field --</option>
-                {allFields.map(f => <option key={f.k} value={f.k}>{f.l}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="text-[10px] text-gray-400 font-medium block mb-1">Giá trị</label>
-              <select value={wg.valField ?? ''} onChange={e => onUpdate({ valField: e.target.value })}
-                className="w-full text-xs rounded border border-gray-200 px-2 py-1.5 bg-white focus:border-brand-400 focus:outline-none">
-                <option value="">-- chọn field --</option>
-                {numFields.map(f => <option key={f.k} value={f.k}>{f.l}</option>)}
-              </select>
-            </div>
-          </>
         )}
 
         {/* Span */}
@@ -349,6 +302,17 @@ function ScreenDesigner({
   const [screenName, setScreenName] = useState(state.screenName);
   const [palDs, setPalDs] = useState(state.palDs);
   const [dropInd, setDropInd] = useState<{ id: string; side: 'before' | 'after' } | null>(null);
+
+  // Live operations loaded from provider registry
+  const [operations, setOperations] = useState<OperationEntry[]>([]);
+  const [opsLoading, setOpsLoading] = useState(false);
+  useEffect(() => {
+    setOpsLoading(true);
+    listOperations()
+      .then(ops => setOperations(ops))
+      .catch(() => { /* silent — operations dropdown stays empty */ })
+      .finally(() => setOpsLoading(false));
+  }, []);
 
   const dragRef = useRef<{ fromPal: boolean; palType: string; fromCv: boolean; cvWgId: string }>({ fromPal:false, palType:'', fromCv:false, cvWgId:'' });
   const rszRef = useRef<{ wgId:string; startX:number; startSpan:number; colW:number } | null>(null);
@@ -488,25 +452,16 @@ function ScreenDesigner({
             ))}
           </div>
           <div className="border-t border-gray-200 p-3">
-            <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-gray-400">Nguồn dữ liệu</p>
-            <select value={palDs} onChange={e => setPalDs(e.target.value)}
-              className="w-full rounded border border-gray-200 bg-white px-2 py-1.5 text-[10px] focus:border-brand-400 focus:outline-none">
-              <option value="">-- Chọn provider --</option>
-              <optgroup label="SQL">
-                {['sql.sales_monthly','sql.top_products','sql.kpi_summary','sql.orders_recent','sql.regional_stats'].map(k => <option key={k} value={k}>{DS[k].label}</option>)}
-              </optgroup>
-              <optgroup label="Excel"><option value="excel.sales_dashboard">{DS['excel.sales_dashboard'].label}</option></optgroup>
-              <optgroup label="gRPC / ML">
-                {['ml.fraud.score','ml.fraud.batchScore'].map(k => <option key={k} value={k}>{DS[k].label}</option>)}
-              </optgroup>
-            </select>
-            {palDs && DS[palDs] && (
-              <div className="mt-2">
-                <span className={`text-[9px] rounded px-1.5 py-0.5 font-semibold ${dsCls(DS[palDs].type)}`}>{DS[palDs].type} · {DS[palDs].provider}</span>
-                <div className="mt-1.5 flex flex-wrap gap-1">
-                  {DS[palDs].fields.map(f => <span key={f.k} className="text-[9px] font-mono bg-gray-100 rounded px-1 text-gray-500">{f.k}</span>)}
-                </div>
-              </div>
+            <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-gray-400">Operation mặc định</p>
+            <OperationSelect
+              value={palDs}
+              onChange={setPalDs}
+              operations={operations}
+              loading={opsLoading}
+              className="w-full text-[10px] px-2 py-1.5"
+            />
+            {palDs && (
+              <p className="mt-1.5 text-[9px] font-mono text-gray-400 break-all">{palDs}</p>
             )}
           </div>
         </div>
@@ -551,10 +506,10 @@ function ScreenDesigner({
                   {/* Preview */}
                   <WidgetPreview wg={wg}/>
                   {/* DS badge */}
-                  {wg.ds && DS[wg.ds] && (
+                  {wg.ds && (
                     <div className="mt-1.5 flex items-center gap-1">
                       <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ background: wg.color }}/>
-                      <span className="text-[9px] text-gray-400 truncate">{DS[wg.ds].label}</span>
+                      <span className="text-[9px] font-mono text-gray-400 truncate">{wg.ds}</span>
                     </div>
                   )}
                   {/* Resize handle */}
@@ -573,6 +528,8 @@ function ScreenDesigner({
           {selWg ? (
             <ConfigPanel
               wg={selWg}
+              operations={operations}
+              opsLoading={opsLoading}
               onUpdate={patch => setWidgets(ws => ws.map(w => w.id === selWg.id ? { ...w, ...patch } : w))}
               onDelete={() => { setWidgets(ws => ws.filter(w => w.id !== selWg.id)); setSelWgId(null); }}
             />

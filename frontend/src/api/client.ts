@@ -43,6 +43,21 @@ export function hasRealmRole(role: string): boolean {
 /** @deprecated No-op — kept for backward compatibility */
 export function registerTokenProvider(_fn: () => string | null): void { /* noop */ }
 
+/** Extract userId (sub) and tenantId from the stored OIDC access token. */
+export function getUserClaims(): { userId: string; tenantId: string } {
+  const token = getAccessToken();
+  if (!token) return { userId: '', tenantId: '' };
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1])) as Record<string, unknown>;
+    return {
+      userId:   (payload.sub        as string) ?? '',
+      tenantId: (payload.tenant_id  as string) ?? '',
+    };
+  } catch {
+    return { userId: '', tenantId: '' };
+  }
+}
+
 // ── Headers ──────────────────────────────────────────────────────────────────
 
 function buildHeaders(extra?: Record<string, string>): Record<string, string> {
