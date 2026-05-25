@@ -92,8 +92,14 @@ function isLineData(d: unknown): d is LineData {
   return Array.isArray(o.labels) && Array.isArray(o.series) && o.series.length > 0;
 }
 
+function fmtAxisVal(v: number): string {
+  if (v >= 1_000_000) return (v / 1_000_000).toFixed(1) + 'M';
+  if (v >= 1_000)     return (v / 1_000).toFixed(0) + 'K';
+  return v.toFixed(0);
+}
+
 function renderLine(data: unknown, color: string, cfg: WidgetConfig): React.ReactNode {
-  // Normalise: standard format OR row-array with xField/yField
+  // Normalise: standard {labels, series[]} OR row-array with xField/yField
   let lineData: LineData | null = null;
 
   if (isLineData(data)) {
@@ -109,42 +115,71 @@ function renderLine(data: unknown, color: string, cfg: WidgetConfig): React.Reac
   if (!lineData) return <FormatError />;
 
   const { labels, series } = lineData;
-  const all = series.flatMap(s => s.data);
-  const mn  = Math.min(...all, 0);
-  const mx  = Math.max(...all, 1);
   const H = 80, W = 300, pad = 5;
-
-  const toY = (v: number) => H - pad - ((v - mn) / (mx - mn)) * (H - pad * 2);
   const toX = (i: number) => pad + (i / Math.max(labels.length - 1, 1)) * (W - pad * 2);
+
+  // Mỗi series dùng Y-scale riêng → tránh series nhỏ bị flatten khi cùng trục với series lớn
+  const seriesScaled = series.map((s, si) => {
+    const mn = Math.min(...s.data, 0);
+    const mx = Math.max(...s.data, 1);
+    const toY = (v: number) => H - pad - ((v - mn) / (mx - mn || 1)) * (H - pad * 2);
+    const pts = s.data.map((v, i) => `${toX(i)},${toY(v)}`).join(' ');
+    const fill = `${pts} ${toX(s.data.length - 1)},${H} ${toX(0)},${H}`;
+    const c = CHART_COLORS[si % CHART_COLORS.length] ?? color;
+    const maxV = Math.max(...s.data);
+    return { s, si, pts, fill, c, maxV };
+  });
+
+  // Thin out labels — show ~6 evenly spaced (tránh chồng chéo với 30 điểm)
+  const step = Math.ceil(labels.length / 6);
+  const shownLabels = labels
+    .map((l, i) => ({ l, i }))
+    .filter(({ i }) => i === 0 || i === labels.length - 1 || i % step === 0);
 
   return (
     <div>
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: H }} preserveAspectRatio="none">
         <defs>
-          {series.map((_, si) => (
+          {seriesScaled.map(({ si, c }) => (
             <linearGradient key={si} id={`lg-${si}`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={CHART_COLORS[si] ?? color} stopOpacity=".25"/>
-              <stop offset="100%" stopColor={CHART_COLORS[si] ?? color} stopOpacity="0"/>
+              <stop offset="0%" stopColor={c} stopOpacity=".2"/>
+              <stop offset="100%" stopColor={c} stopOpacity="0"/>
             </linearGradient>
           ))}
         </defs>
-        {series.map((s, si) => {
-          const pts = s.data.map((v, i) => `${toX(i)},${toY(v)}`).join(' ');
-          const fill = `${pts} ${toX(s.data.length-1)},${H} ${toX(0)},${H}`;
-          const c = CHART_COLORS[si] ?? color;
-          return (
-            <g key={si}>
-              <polygon points={fill} fill={`url(#lg-${si})`} />
-              <polyline points={pts} fill="none" stroke={c} strokeWidth="1.8" />
-            </g>
-          );
-        })}
+        {seriesScaled.map(({ si, pts, fill, c }) => (
+          <g key={si}>
+            <polygon points={fill} fill={`url(#lg-${si})`} />
+            <polyline points={pts} fill="none" stroke={c} strokeWidth="1.8" />
+          </g>
+        ))}
       </svg>
-      {/* X-axis labels — first and last */}
+
+      {/* X-axis labels — evenly thinned */}
       {labels.length >= 2 && (
-        <div className="flex justify-between mt-1 px-1">
-          <span className="text-[10px] text-gray-400">{labels[0]}</span>
-          <span className="text-[10px] text-gray-400">{labels[labels.length - 1]}</span>
+        <div className="relative mt-0.5 h-4">
+          {shownLabels.map(({ l, i }) => (
+            <span
+              key={i}
+              className="absolute text-[9px] text-gray-400 -translate-x-1/2"
+              style={{ left: `${(i / (labels.length - 1)) * 100}%` }}
+            >
+              {l}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Legend — chỉ hiện khi nhiều hơn 1 series */}
+      {series.length > 1 && (
+        <div className="mt-2 flex flex-wrap gap-3">
+          {seriesScaled.map(({ s, si, c, maxV }) => (
+            <div key={si} className="flex items-center gap-1.5 text-[10px]">
+              <span className="inline-block w-3 h-0.5 rounded" style={{ background: c }} />
+              <span className="text-gray-500">{s.name}</span>
+              <span className="text-gray-400 tabular-nums">max {fmtAxisVal(maxV)}</span>
+            </div>
+          ))}
         </div>
       )}
     </div>
@@ -246,19 +281,31 @@ function renderTable(data: unknown, cfg: WidgetConfig): React.ReactNode {
 
   if (data && typeof data === 'object' && !Array.isArray(data)) {
     const o = data as Record<string, unknown>;
-    // { columns, rows } format
     if (Array.isArray(o.rows)) {
+      // { columns?, rows[] } format
       rows = o.rows as Row[];
       if (Array.isArray(o.columns)) {
         cols = o.columns as { key: string; label: string }[];
       }
     } else {
-      // Maybe it's { products: [...] } or { regions: [...] } — find first array value
-      const arr = Object.values(o).find(v => Array.isArray(v));
-      if (arr) rows = arr as Row[];
+      // Tìm array đầu tiên trong object (vd: alerts[], products[], regions[])
+      const entry = Object.entries(o).find(([, v]) => Array.isArray(v));
+      if (entry) {
+        const arr = entry[1] as unknown[];
+        if (arr.length > 0 && typeof arr[0] === 'string') {
+          // string[] (vd: alerts) → bảng 1 cột
+          rows = arr.map(s => ({ [entry[0]]: s }));
+        } else {
+          rows = arr as Row[];
+        }
+      }
     }
   } else if (Array.isArray(data)) {
-    rows = data as Row[];
+    if (data.length > 0 && typeof data[0] === 'string') {
+      rows = (data as string[]).map((s, i) => ({ '#': i + 1, value: s }));
+    } else {
+      rows = data as Row[];
+    }
   }
 
   if (!rows.length) return <FormatError />;
@@ -305,10 +352,23 @@ function renderKpi(data: unknown, color: string, cfg: WidgetConfig): React.React
 
   if (data && typeof data === 'object' && !Array.isArray(data)) {
     const o = data as Record<string, unknown>;
-    // Standard format: { value, label, trend, unit }
-    value = (cfg.valField ? o[cfg.valField] : o.value) as string|number ?? '—';
-    label = o.label as string | undefined;
-    trend = (cfg.trendField ? o[cfg.trendField] : o.trend) as string|number|undefined;
+
+    if (cfg.valField) {
+      // Admin đã chỉ định field cụ thể
+      value = o[cfg.valField] as string | number ?? '—';
+    } else if (typeof o.value !== 'undefined') {
+      // Standard format: { value, label, trend, unit }
+      value = o.value as string | number;
+    } else {
+      // Auto-pick: lấy field số đầu tiên trong object (bỏ qua nested object/array)
+      const firstNum = Object.entries(o).find(
+        ([, v]) => typeof v === 'number' && isFinite(v as number)
+      );
+      if (firstNum) value = firstNum[1] as number;
+    }
+
+    label = (o.label ?? (cfg.valField ? undefined : o.topProduct ?? o.topRegion)) as string | undefined;
+    trend = (cfg.trendField ? o[cfg.trendField] : o.trend) as string | number | undefined;
     unit  = o.unit as string | undefined;
   } else if (typeof data === 'number' || typeof data === 'string') {
     value = data;
