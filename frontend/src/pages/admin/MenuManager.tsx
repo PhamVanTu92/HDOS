@@ -305,6 +305,8 @@ function ConfigPanel({
 interface DesignerState {
   menuId: string; screenId: string | null;
   screenName: string; screenIcon: string;
+  refreshMode: 'none' | 'timer' | 'sse';
+  refreshIntervalS: number;
   widgets: DesignerWidget[]; selWgId: string | null; palDs: string;
 }
 
@@ -321,6 +323,8 @@ function ScreenDesigner({
   const [screenName, setScreenName] = useState(state.screenName);
   const [palDs, setPalDs] = useState(state.palDs);
   const [dropInd, setDropInd] = useState<{ id: string; side: 'before' | 'after' } | null>(null);
+  const [refreshMode, setRefreshMode] = useState<'none' | 'timer' | 'sse'>(state.refreshMode);
+  const [refreshIntervalS, setRefreshIntervalS] = useState(state.refreshIntervalS || 30);
 
   // Providers + their operations (loaded once on designer open)
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
@@ -448,10 +452,36 @@ function ScreenDesigner({
         <div className="h-5 w-px bg-gray-200"/>
         <span className="text-sm font-semibold text-gray-700">Thiết kế màn hình</span>
         <div className="flex-1"/>
+        {/* Refresh settings */}
+        <div className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1.5">
+          <span className="text-[10px] font-medium text-gray-400 whitespace-nowrap">⟳ Refresh:</span>
+          <select
+            value={refreshMode}
+            onChange={e => setRefreshMode(e.target.value as 'none' | 'timer' | 'sse')}
+            className="bg-transparent text-[10px] text-gray-600 border-none outline-none cursor-pointer">
+            <option value="none">Tắt</option>
+            <option value="timer">Timer</option>
+            <option value="sse">SSE</option>
+          </select>
+          {refreshMode === 'timer' && (
+            <>
+              <input
+                type="number" min={5} max={3600}
+                value={refreshIntervalS}
+                onChange={e => setRefreshIntervalS(Math.max(5, Number(e.target.value)))}
+                className="w-14 rounded border border-gray-200 bg-white px-1.5 py-0.5 text-[10px] text-center focus:border-brand-400 focus:outline-none"
+              />
+              <span className="text-[10px] text-gray-400">giây</span>
+            </>
+          )}
+          {refreshMode === 'sse' && (
+            <span className="text-[10px] text-green-600 font-medium">● Live</span>
+          )}
+        </div>
         <input value={screenName} onChange={e => setScreenName(e.target.value)}
           className="w-52 rounded-lg border border-gray-200 px-3 py-1.5 text-xs focus:border-brand-400 focus:outline-none"
           placeholder="Tên màn hình..."/>
-        <button onClick={() => onSave({ ...state, widgets, screenName, selWgId, palDs })}
+        <button onClick={() => onSave({ ...state, widgets, screenName, selWgId, palDs, refreshMode, refreshIntervalS })}
           disabled={saving}
           className="flex items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:opacity-60 transition-colors">
           {saving ? '💾 Đang lưu…' : '💾 Lưu'}
@@ -780,7 +810,12 @@ export function MenuManager() {
           catField: cfg.catField as string, cols: cfg.cols as string[],
         };
       });
-      setDesigner({ menuId: selId, screenId: sc.id, screenName: sc.name, screenIcon: sc.icon, widgets, selWgId: null, palDs: '' });
+      setDesigner({
+        menuId: selId, screenId: sc.id, screenName: sc.name, screenIcon: sc.icon,
+        refreshMode: sc.refreshMode ?? 'none',
+        refreshIntervalS: sc.refreshIntervalS ?? 30,
+        widgets, selWgId: null, palDs: '',
+      });
     } catch (e) { toast('Lỗi mở designer: ' + (e instanceof Error ? e.message : '')); }
   };
 
@@ -790,6 +825,8 @@ export function MenuManager() {
     try {
       const body = {
         name: s.screenName, icon: s.screenIcon || '📊', status: 'published',
+        refreshMode: s.refreshMode,
+        refreshIntervalS: s.refreshIntervalS,
         widgets: s.widgets.map((w, i) => ({
           widgetType: w.type, title: w.title, colSpan: w.span, sortOrder: i,
           color: w.color, dataSource: w.ds || null,

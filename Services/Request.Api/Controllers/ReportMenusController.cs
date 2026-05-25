@@ -157,12 +157,14 @@ public sealed class ReportMenusController : ControllerBase
 
         // Permission check on menu (by slug) + fetch screen
         Guid   menuId;
-        string menuName, menuSlug, screenName, screenIcon;
+        string menuName, menuSlug, screenName, screenIcon, refreshMode;
+        int    refreshIntervalS;
 
         await using (var screenCmd = conn.CreateCommand())
         {
             screenCmd.CommandText = """
-                SELECT s.id, s.name, s.icon, m.id, m.name, m.slug
+                SELECT s.id, s.name, s.icon, m.id, m.name, m.slug,
+                       s.refresh_mode, s.refresh_interval_s
                 FROM report_screens s
                 JOIN menu_nodes m ON m.id = s.menu_id
                 LEFT JOIN menu_permissions p ON p.menu_id = m.id
@@ -190,11 +192,13 @@ public sealed class ReportMenusController : ControllerBase
             await using var rdr = await screenCmd.ExecuteReaderAsync(ct);
             if (!await rdr.ReadAsync(ct)) return NotFound();
 
-            screenName = rdr.GetString(1);
-            screenIcon = rdr.GetString(2);
-            menuId     = rdr.GetGuid(3);
-            menuName   = rdr.GetString(4);
-            menuSlug   = rdr.GetString(5);
+            screenName       = rdr.GetString(1);
+            screenIcon       = rdr.GetString(2);
+            menuId           = rdr.GetGuid(3);
+            menuName         = rdr.GetString(4);
+            menuSlug         = rdr.GetString(5);
+            refreshMode      = rdr.GetString(6);
+            refreshIntervalS = rdr.GetInt32(7);
         }
 
         // Fetch widgets
@@ -227,11 +231,13 @@ public sealed class ReportMenusController : ControllerBase
         return Ok(new
         {
             screenId,
-            name      = screenName,
-            icon      = screenIcon,
+            name             = screenName,
+            icon             = screenIcon,
             menuId,
             menuName,
             menuSlug,
+            refreshMode,
+            refreshIntervalS,
             widgets
         });
     }

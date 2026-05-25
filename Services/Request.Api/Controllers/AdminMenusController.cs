@@ -144,7 +144,7 @@ public sealed class AdminMenusController : ControllerBase
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = """
             SELECT s.id, s.menu_id, s.name, s.icon, s.status, s.sort_order,
-                   s.created_at, s.updated_at,
+                   s.created_at, s.updated_at, s.refresh_mode, s.refresh_interval_s,
                    COUNT(w.id) AS widget_count
             FROM report_screens s
             LEFT JOIN screen_widgets w ON w.screen_id = s.id
@@ -160,15 +160,17 @@ public sealed class AdminMenusController : ControllerBase
         {
             rows.Add(new
             {
-                id          = rdr.GetGuid(0),
-                menuId      = rdr.GetGuid(1),
-                name        = rdr.GetString(2),
-                icon        = rdr.GetString(3),
-                status      = rdr.GetString(4),
-                sortOrder   = rdr.GetInt32(5),
-                createdAt   = rdr.GetDateTime(6),
-                updatedAt   = rdr.GetDateTime(7),
-                widgetCount = rdr.GetInt64(8)
+                id               = rdr.GetGuid(0),
+                menuId           = rdr.GetGuid(1),
+                name             = rdr.GetString(2),
+                icon             = rdr.GetString(3),
+                status           = rdr.GetString(4),
+                sortOrder        = rdr.GetInt32(5),
+                createdAt        = rdr.GetDateTime(6),
+                updatedAt        = rdr.GetDateTime(7),
+                refreshMode      = rdr.GetString(8),
+                refreshIntervalS = rdr.GetInt32(9),
+                widgetCount      = rdr.GetInt64(10)
             });
         }
         return Ok(rows);
@@ -264,10 +266,12 @@ public sealed class AdminMenusController : ControllerBase
             updateCmd.Transaction = tx;
             updateCmd.CommandText = """
                 UPDATE report_screens SET
-                    name       = $3,
-                    icon       = $4,
-                    status     = $5,
-                    updated_at = NOW()
+                    name              = $3,
+                    icon              = $4,
+                    status            = $5,
+                    refresh_mode      = $6,
+                    refresh_interval_s = $7,
+                    updated_at        = NOW()
                 WHERE id = $1 AND menu_id = $2
                 RETURNING id
                 """;
@@ -276,6 +280,8 @@ public sealed class AdminMenusController : ControllerBase
             updateCmd.Parameters.AddWithValue(req.Name);
             updateCmd.Parameters.AddWithValue(req.Icon);
             updateCmd.Parameters.AddWithValue(req.Status);
+            updateCmd.Parameters.AddWithValue(req.RefreshMode ?? "none");
+            updateCmd.Parameters.AddWithValue(req.RefreshIntervalS ?? 0);
 
             var result = await updateCmd.ExecuteScalarAsync(ct);
             if (result is null)
@@ -602,10 +608,12 @@ public sealed record WidgetSaveItem(
 );
 
 public sealed record SaveScreenRequest(
-    string             Name,
-    string             Icon,
-    string             Status,
-    List<WidgetSaveItem> Widgets
+    string               Name,
+    string               Icon,
+    string               Status,
+    List<WidgetSaveItem> Widgets,
+    string?              RefreshMode      = null,   // 'none' | 'timer' | 'sse'
+    int?                 RefreshIntervalS = null    // seconds; used when RefreshMode='timer'
 );
 
 public sealed record PermissionRequest(

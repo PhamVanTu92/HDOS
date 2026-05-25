@@ -48,6 +48,8 @@ export interface ScreenDetail {
   menuId: string;
   menuName: string;
   menuSlug: string;
+  refreshMode: 'none' | 'timer' | 'sse';
+  refreshIntervalS: number;
   widgets: WidgetDef[];
 }
 
@@ -73,6 +75,8 @@ export interface AdminScreen {
   status: 'draft' | 'published';
   sortOrder: number;
   widgetCount: number;
+  refreshMode: 'none' | 'timer' | 'sse';
+  refreshIntervalS: number;
 }
 
 export interface AdminPermission {

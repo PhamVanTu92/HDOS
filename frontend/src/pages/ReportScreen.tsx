@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { apiGet, getUserClaims } from '../api/client';
 import { submitRequest, pollResult } from '../api/requests';
+import { sseClient } from '../api/sse';
 import type { MenuDetail, ScreenDetail, WidgetDef, WidgetConfig } from '../types/menuTypes';
 
 // ---------------------------------------------------------------------------
@@ -25,7 +26,7 @@ import type { MenuDetail, ScreenDetail, WidgetDef, WidgetConfig } from '../types
 // ---------------------------------------------------------------------------
 type DataStatus = 'idle' | 'loading' | 'done' | 'error';
 
-function useWidgetData(widget: WidgetDef) {
+function useWidgetData(widget: WidgetDef, refreshKey: number) {
   const [status, setStatus]   = useState<DataStatus>('idle');
   const [data,   setData]     = useState<unknown>(null);
   const [error,  setError]    = useState<string | null>(null);
@@ -73,7 +74,8 @@ function useWidgetData(widget: WidgetDef) {
     })();
 
     return () => { abortRef.current = true; };
-  }, [widget.id, widget.dataSource, widget.config]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [widget.id, widget.dataSource, widget.config, refreshKey]);
 
   return { status, data, error };
 }
@@ -436,8 +438,8 @@ function DataSourceBadge({ source }: { source: string }) {
 // ---------------------------------------------------------------------------
 // Widget card
 // ---------------------------------------------------------------------------
-function WidgetCard({ widget }: { widget: WidgetDef }) {
-  const { status, data, error } = useWidgetData(widget);
+function WidgetCard({ widget, refreshKey }: { widget: WidgetDef; refreshKey: number }) {
+  const { status, data, error } = useWidgetData(widget, refreshKey);
 
   let cfg: WidgetConfig = {};
   try { cfg = JSON.parse(widget.config) as WidgetConfig; } catch { /* ignore */ }
@@ -539,6 +541,9 @@ export function ReportScreen() {
   const [screenLoading, setScreenLoading] = useState(false);
   const [screenError,   setScreenError]   = useState<string | null>(null);
 
+  // Incremented to trigger a fresh data-fetch in all WidgetCards
+  const [refreshKey, setRefreshKey] = useState(0);
+
   const selectedScreenId = searchParams.get('screenId') ?? '';
 
   // Load menu detail
@@ -564,11 +569,34 @@ export function ReportScreen() {
     setScreenLoading(true);
     setScreenError(null);
     setScreen(null);
+    setRefreshKey(0); // reset on screen change
     apiGet<ScreenDetail>('/api/v1/reports/menus/' + menuSlug + '/screens/' + selectedScreenId)
       .then((data) => setScreen(data))
       .catch((err: unknown) => setScreenError(err instanceof Error ? err.message : 'Không thể tải màn hình'))
       .finally(() => setScreenLoading(false));
   }, [menuSlug, selectedScreenId]);
+
+  // ── Timer-based auto-refresh ─────────────────────────────────────────────
+  useEffect(() => {
+    if (!screen || screen.refreshMode !== 'timer') return;
+    const ms = (screen.refreshIntervalS > 0 ? screen.refreshIntervalS : 30) * 1000;
+    const id = setInterval(() => setRefreshKey(k => k + 1), ms);
+    return () => clearInterval(id);
+  }, [screen?.refreshMode, screen?.refreshIntervalS, screen?.screenId]);
+
+  // ── SSE-triggered refresh ────────────────────────────────────────────────
+  useEffect(() => {
+    if (!screen || screen.refreshMode !== 'sse') return;
+    const channel = `screen:${screen.screenId}`;
+    sseClient.subscribeWidget(channel);
+    const unsub = sseClient.on('WidgetStale', (evt) => {
+      if (evt.channel === channel) setRefreshKey(k => k + 1);
+    });
+    return () => {
+      unsub();
+      sseClient.unsubscribeWidget(channel);
+    };
+  }, [screen?.refreshMode, screen?.screenId]);
 
   function selectScreen(id: string) { setSearchParams({ screenId: id }); }
 
@@ -651,6 +679,22 @@ export function ReportScreen() {
             <div className="flex items-center gap-3">
               <span className="text-xl">{screen.icon}</span>
               <h2 className="text-xl font-bold text-gray-800">{screen.name}</h2>
+              {/* Refresh mode badge */}
+              {screen.refreshMode === 'timer' && screen.refreshIntervalS > 0 && (
+                <span className="ml-1 flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-1 text-[10px] font-medium text-blue-600 border border-blue-100">
+                  <span className="inline-block animate-spin" style={{ animationDuration: '3s' }}>⟳</span>
+                  {screen.refreshIntervalS}s
+                </span>
+              )}
+              {screen.refreshMode === 'sse' && (
+                <span className="ml-1 flex items-center gap-1 rounded-full bg-green-50 px-2.5 py-1 text-[10px] font-medium text-green-600 border border-green-100">
+                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />
+                  Live
+                </span>
+              )}
+              {refreshKey > 0 && (
+                <span className="text-[10px] text-gray-300 tabular-nums">#{refreshKey}</span>
+              )}
             </div>
           ) : (
             <div className="h-7 w-48 animate-pulse rounded bg-gray-200" />
@@ -677,7 +721,7 @@ export function ReportScreen() {
           {!screenLoading && !screenError && screen && sortedWidgets.length > 0 && (
             <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(12, minmax(0, 1fr))' }}>
               {sortedWidgets.map((w) => (
-                <WidgetCard key={w.id} widget={w} />
+                <WidgetCard key={w.id} widget={w} refreshKey={refreshKey} />
               ))}
             </div>
           )}
