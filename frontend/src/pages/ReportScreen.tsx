@@ -26,6 +26,8 @@ import type { MenuDetail, ScreenDetail, WidgetDef, WidgetConfig } from '../types
 // ---------------------------------------------------------------------------
 type DataStatus = 'idle' | 'loading' | 'done' | 'error';
 
+// refreshKey = 0 → initial load (60s cache ok)
+// refreshKey > 0 → SSE or timer triggered → bypass cache to get fresh data
 function useWidgetData(widget: WidgetDef, refreshKey: number) {
   const [status, setStatus]   = useState<DataStatus>('idle');
   const [data,   setData]     = useState<unknown>(null);
@@ -51,7 +53,7 @@ function useWidgetData(widget: WidgetDef, refreshKey: number) {
           params:       (cfg.params as Record<string, unknown>) ?? {},
           tenantId,
           userId,
-          cacheSeconds: 60,
+          cacheSeconds: refreshKey > 0 ? 0 : 60, // bypass cache on SSE/timer refresh
         });
         if (abortRef.current) return;
 

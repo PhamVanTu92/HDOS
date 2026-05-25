@@ -97,6 +97,7 @@ builder.Services.AddSingleton<OrphanDetector>();
 builder.Services.AddHostedService<ProgressPubSubSubscriber>();
 builder.Services.AddHostedService<UserEventPubSubSubscriber>();
 builder.Services.AddHostedService<WidgetCacheInvalidationSubscriber>();
+builder.Services.AddHostedService<SseScreenRefreshWorker>();
 
 // ── JWT authentication (user JWTs from external IdP) ─────────────────────
 var publicIssuer = builder.Configuration["Auth:PublicIssuer"] ?? jwtAuth;
