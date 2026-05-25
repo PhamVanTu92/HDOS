@@ -10,6 +10,7 @@ import { ProviderOperations } from './pages/admin/ProviderOperations';
 import { TestConsole } from './pages/admin/TestConsole';
 import { ReportDesigner } from './pages/admin/ReportDesigner';
 import { DataSyncMonitor } from './pages/admin/DataSyncMonitor';
+import { MenuManager } from './pages/admin/MenuManager';
 
 // Handle the OIDC callback (silent renew / redirect back)
 function OidcCallback() {
@@ -40,6 +41,7 @@ export default function App() {
                 <Route path="/admin/test"         element={<TestConsole />} />
                 <Route path="/admin/designer"     element={<ReportDesigner />} />
                 <Route path="/admin/sync"         element={<DataSyncMonitor />} />
+                <Route path="/admin/menus"        element={<MenuManager />} />
               </Routes>
             </Layout>
           </ProtectedRoute>

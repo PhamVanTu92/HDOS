@@ -86,6 +86,15 @@ function SyncIcon() {
   );
 }
 
+function MenuIcon() {
+  return (
+    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+        d="M4 6h16M4 12h8m-8 6h16" />
+    </svg>
+  );
+}
+
 // ── Nav items ─────────────────────────────────────────────────────────────────
 
 const NAV_ITEMS: NavItem[] = [
@@ -100,6 +109,7 @@ const ADMIN_ITEMS: NavItem[] = [
   { to: '/admin/test',       label: 'Test Console',            icon: <TerminalIcon /> },
   { to: '/admin/designer',   label: 'Thiết kế Báo cáo',      icon: <PencilIcon /> },
   { to: '/admin/sync',       label: 'Theo dõi đồng bộ',      icon: <SyncIcon /> },
+  { to: '/admin/menus',      label: 'Quản lý Menu BC',        icon: <MenuIcon /> },
 ];
 
 // ── Sub-nav item (indented) ───────────────────────────────────────────────────
@@ -215,6 +225,7 @@ export function Layout({ children }: { children: ReactNode }) {
               <SubNavLink item={ADMIN_ITEMS[2]} open={sidebarOpen} />
               <SubNavLink item={ADMIN_ITEMS[3]} open={sidebarOpen} />
               <SubNavLink item={ADMIN_ITEMS[4]} open={sidebarOpen} />
+              <SubNavLink item={ADMIN_ITEMS[5]} open={sidebarOpen} />
             </>
           )}
         </nav>
