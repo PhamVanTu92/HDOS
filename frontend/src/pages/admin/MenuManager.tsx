@@ -12,8 +12,8 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { apiGet, apiPost, apiPut, apiDelete } from '../../api/client';
-import { listOperations } from '../../api/admin';
-import type { OperationEntry } from '../../api/admin';
+import { listProviders } from '../../api/admin';
+import type { ProviderInfo } from '../../api/admin';
 import type {
   AdminMenuNode, AdminScreen, AdminPermission, WidgetDef,
 } from '../../types/menuTypes';
@@ -118,59 +118,81 @@ function WidgetPreview({ wg }: { wg: DesignerWidget }) {
 
 // ── ConfigPanel ────────────────────────────────────────────────────────────────
 
-// ── Helper: group operations by provider ──────────────────────────────────────
+// ── ProviderOperationSelect — 2-step: chọn provider → chọn operation ─────────
 
-function groupByProvider(ops: OperationEntry[]): Map<string, OperationEntry[]> {
-  const m = new Map<string, OperationEntry[]>();
-  for (const op of ops) {
-    const key = op.providerId ?? '(no provider)';
-    if (!m.has(key)) m.set(key, []);
-    m.get(key)!.push(op);
-  }
-  return m;
-}
-
-// ── OperationSelect — reusable across palette + config panel ──────────────────
-
-function OperationSelect({
-  value, onChange, operations, loading, className = '',
+function ProviderOperationSelect({
+  value, onChange, providers, loading, className = '',
 }: {
   value: string;
-  onChange: (v: string) => void;
-  operations: OperationEntry[];
+  onChange: (op: string) => void;
+  providers: ProviderInfo[];
   loading: boolean;
   className?: string;
 }) {
-  const grouped = groupByProvider(operations.filter(o => o.status === 'active'));
+  const active = providers.filter(p => p.status === 'active');
+
+  // Auto-detect provider từ operation đang chọn (khi mở widget đã có sẵn)
+  const initialProvider = active.find(p => p.operations.includes(value))?.providerId ?? '';
+  const [selProvider, setSelProvider] = useState(initialProvider);
+
+  // Sync lại khi value thay đổi từ bên ngoài (switch widget)
+  useEffect(() => {
+    const found = active.find(p => p.operations.includes(value));
+    setSelProvider(found?.providerId ?? '');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
+
+  const ops = active.find(p => p.providerId === selProvider)?.operations ?? [];
+  const selCls = `w-full rounded border border-gray-200 bg-white focus:border-brand-400 focus:outline-none disabled:opacity-60 ${className}`;
+
   return (
-    <select
-      value={value}
-      onChange={e => onChange(e.target.value)}
-      disabled={loading}
-      className={`rounded border border-gray-200 bg-white focus:border-brand-400 focus:outline-none disabled:opacity-60 ${className}`}
-    >
-      <option value="">{loading ? 'Đang tải…' : '-- Chọn operation --'}</option>
-      {Array.from(grouped.entries()).map(([provider, ops]) => (
-        <optgroup key={provider} label={provider}>
-          {ops.map(op => (
-            <option key={op.operationPattern} value={op.operationPattern}>
-              {op.operationPattern}
-            </option>
-          ))}
-        </optgroup>
-      ))}
-    </select>
+    <div className="space-y-1.5">
+      {/* Bước 1: Chọn provider */}
+      <select
+        value={selProvider}
+        onChange={e => { setSelProvider(e.target.value); onChange(''); }}
+        disabled={loading}
+        className={selCls}
+      >
+        <option value="">{loading ? 'Đang tải providers…' : '① Chọn provider'}</option>
+        {active.map(p => (
+          <option key={p.providerId} value={p.providerId}>
+            {p.displayName} ({p.operations.length} ops)
+          </option>
+        ))}
+      </select>
+
+      {/* Bước 2: Chọn operation — chỉ hiện khi đã chọn provider */}
+      {selProvider && (
+        <select
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          className={selCls}
+        >
+          <option value="">② Chọn operation</option>
+          {ops.length === 0
+            ? <option disabled>Provider chưa có operation</option>
+            : ops.map(op => <option key={op} value={op}>{op}</option>)
+          }
+        </select>
+      )}
+
+      {/* Badge operation đang chọn */}
+      {value && (
+        <p className="text-[9px] font-mono text-gray-400 break-all leading-tight">{value}</p>
+      )}
+    </div>
   );
 }
 
 // ── ConfigPanel ────────────────────────────────────────────────────────────────
 
 function ConfigPanel({
-  wg, operations, opsLoading, onUpdate, onDelete,
+  wg, providers, providersLoading, onUpdate, onDelete,
 }: {
   wg: DesignerWidget;
-  operations: OperationEntry[];
-  opsLoading: boolean;
+  providers: ProviderInfo[];
+  providersLoading: boolean;
   onUpdate: (patch: Partial<DesignerWidget>) => void;
   onDelete: () => void;
 }) {
@@ -198,19 +220,16 @@ function ConfigPanel({
             className="w-full text-xs rounded border border-gray-200 px-2 py-1.5 focus:border-brand-400 focus:outline-none"/>
         </div>
 
-        {/* Operation (data source) */}
+        {/* Operation (data source) — 2-step: provider → operation */}
         <div>
-          <label className="text-[10px] text-gray-400 font-medium block mb-1">Operation</label>
-          <OperationSelect
+          <label className="text-[10px] text-gray-400 font-medium block mb-1">Nguồn dữ liệu</label>
+          <ProviderOperationSelect
             value={wg.ds}
             onChange={v => onUpdate({ ds: v, xField:'', yField:'', valField:'', trendField:'', catField:'', cols:[] })}
-            operations={operations}
-            loading={opsLoading}
-            className="w-full text-xs px-2 py-1.5"
+            providers={providers}
+            loading={providersLoading}
+            className="text-xs px-2 py-1.5"
           />
-          {wg.ds && (
-            <p className="mt-1 text-[9px] font-mono text-gray-400 truncate">{wg.ds}</p>
-          )}
         </div>
 
         {/* Field mappings — shown only when an operation is selected */}
@@ -303,15 +322,15 @@ function ScreenDesigner({
   const [palDs, setPalDs] = useState(state.palDs);
   const [dropInd, setDropInd] = useState<{ id: string; side: 'before' | 'after' } | null>(null);
 
-  // Live operations loaded from provider registry
-  const [operations, setOperations] = useState<OperationEntry[]>([]);
-  const [opsLoading, setOpsLoading] = useState(false);
+  // Providers + their operations (loaded once on designer open)
+  const [providers, setProviders] = useState<ProviderInfo[]>([]);
+  const [providersLoading, setProvidersLoading] = useState(false);
   useEffect(() => {
-    setOpsLoading(true);
-    listOperations()
-      .then(ops => setOperations(ops))
-      .catch(() => { /* silent — operations dropdown stays empty */ })
-      .finally(() => setOpsLoading(false));
+    setProvidersLoading(true);
+    listProviders()
+      .then(ps => setProviders(ps))
+      .catch(() => { /* silent — dropdowns stay empty */ })
+      .finally(() => setProvidersLoading(false));
   }, []);
 
   const dragRef = useRef<{ fromPal: boolean; palType: string; fromCv: boolean; cvWgId: string }>({ fromPal:false, palType:'', fromCv:false, cvWgId:'' });
@@ -453,16 +472,13 @@ function ScreenDesigner({
           </div>
           <div className="border-t border-gray-200 p-3">
             <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-gray-400">Operation mặc định</p>
-            <OperationSelect
+            <ProviderOperationSelect
               value={palDs}
               onChange={setPalDs}
-              operations={operations}
-              loading={opsLoading}
-              className="w-full text-[10px] px-2 py-1.5"
+              providers={providers}
+              loading={providersLoading}
+              className="text-[10px] px-2 py-1.5"
             />
-            {palDs && (
-              <p className="mt-1.5 text-[9px] font-mono text-gray-400 break-all">{palDs}</p>
-            )}
           </div>
         </div>
 
@@ -528,8 +544,8 @@ function ScreenDesigner({
           {selWg ? (
             <ConfigPanel
               wg={selWg}
-              operations={operations}
-              opsLoading={opsLoading}
+              providers={providers}
+              providersLoading={providersLoading}
               onUpdate={patch => setWidgets(ws => ws.map(w => w.id === selWg.id ? { ...w, ...patch } : w))}
               onDelete={() => { setWidgets(ws => ws.filter(w => w.id !== selWg.id)); setSelWgId(null); }}
             />
