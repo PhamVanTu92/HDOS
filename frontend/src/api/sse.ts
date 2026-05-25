@@ -86,6 +86,11 @@ class SseClient {
     console.info('[SSE] Disconnected');
   }
 
+  /** True when the underlying EventSource has an open connection. */
+  get isConnected(): boolean {
+    return this.eventSource?.readyState === EventSource.OPEN;
+  }
+
   // ── Event subscription ─────────────────────────────────────────────────────
 
   on<K extends keyof SseEventMap>(
