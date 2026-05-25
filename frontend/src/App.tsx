@@ -3,7 +3,8 @@ import { useAuth } from 'react-oidc-context';
 import { ProtectedRoute } from './auth/ProtectedRoute';
 import { Layout } from './components/Layout';
 import { Dashboard } from './pages/Dashboard';
-import { Reports } from './pages/Reports';
+import { ReportViewer } from './pages/ReportViewer';
+import { ReportScreen } from './pages/ReportScreen';
 import { DataManagement } from './pages/DataManagement';
 import { Admin } from './pages/Admin';
 import { ProviderOperations } from './pages/admin/ProviderOperations';
@@ -33,7 +34,8 @@ export default function App() {
             <Layout>
               <Routes>
                 <Route path="/"                   element={<Dashboard />} />
-                <Route path="/reports"            element={<Reports />} />
+                <Route path="/reports"            element={<ReportViewer />} />
+                <Route path="/reports/:menuSlug" element={<ReportScreen />} />
                 <Route path="/data"               element={<DataManagement />} />
                 {/* Admin sub-pages */}
                 <Route path="/admin"              element={<Admin />} />

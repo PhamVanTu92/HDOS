@@ -1,0 +1,1297 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>HDOS — Report Menu Builder (Mockup v2)</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0f172a;--surf:#1e293b;--surf2:#263346;--border:#334155;
+  --text:#e2e8f0;--muted:#94a3b8;--dim:#64748b;
+  --accent:#4f46e5;--accent-h:#4338ca;--accent-l:#818cf8;--accent-d:#1e1b4b;
+  --green:#4ade80;--gbg:#064e3b;
+  --red:#f87171;--rbg:#450a0a;
+  --amber:#fbbf24;--abg:#451a03;
+  --sky:#38bdf8;--r:10px;
+  /* theme-adaptive extras */
+  --cv-bg:#090f1b;--row-hover:#182032;--row-border:#1a2435;
+  --head-txt:#f8fafc;--sc-hover:#1e2d45;
+}
+/* ── Light mode overrides ── */
+html.light{
+  --bg:#f8fafc;--surf:#ffffff;--surf2:#f1f5f9;--border:#e2e8f0;
+  --text:#0f172a;--muted:#475569;--dim:#94a3b8;
+  --accent-d:#ede9fe;--accent-l:#4f46e5;
+  --green:#16a34a;--gbg:#dcfce7;
+  --red:#dc2626;--rbg:#fee2e2;
+  --amber:#ca8a04;--abg:#fef9c3;
+  --cv-bg:#e2e8f0;--row-hover:#f1f5f9;--row-border:#e2e8f0;
+  --head-txt:#0f172a;--sc-hover:#e8edf3;
+}
+html.light .pk-r{background:#ede9fe;color:#7c3aed}
+html.light .pk-u{background:#dbeafe;color:#1d4ed8}
+html.light .ds-sql{background:#dbeafe;color:#1d4ed8}
+html.light .ds-xl{background:#dcfce7;color:#15803d}
+html.light .ds-ml{background:#ede9fe;color:#7c3aed}
+html.light .ds-tag.ds-sql{background:#dbeafe;color:#1d4ed8}
+html.light .ds-tag.ds-xl{background:#dcfce7;color:#15803d}
+html.light .ds-tag.ds-ml{background:#ede9fe;color:#7c3aed}
+html.light .ft-num{background:#dbeafe;color:#1d4ed8}
+html.light .ft-str{background:#ede9fe;color:#7c3aed}
+html.light .ft-dt{background:#dcfce7;color:#15803d}
+html.light .hint-b{background:#eff6ff;border-color:#93c5fd;color:#1d4ed8}
+html.light .hint-a{background:#fffbeb;border-color:#fcd34d;color:#92400e}
+html.light .ba{background:#fef9c3;color:#ca8a04}
+html.light .bd{background:#f1f5f9;color:#475569}
+html.light .bac{background:#ede9fe;color:#4f46e5}
+html.light .bg{background:#dcfce7;color:#16a34a}
+html.light .chip{border-color:#cbd5e1;color:#64748b}
+html.light .tog.off{background:#cbd5e1}
+body{font-family:system-ui,sans-serif;background:var(--bg);color:var(--text);
+  height:100vh;display:flex;flex-direction:column;overflow:hidden;font-size:14px;user-select:none}
+/* Smooth transition only while theme is switching */
+html.theme-transitioning *{transition:background-color .22s,border-color .22s,color .22s,
+  box-shadow .22s !important}
+
+/* ── Topbar ── */
+.tb{display:flex;align-items:center;gap:10px;padding:0 18px;height:50px;
+  background:var(--surf);border-bottom:1px solid var(--border);flex-shrink:0}
+.tb-logo{font-weight:800;font-size:.95rem;color:var(--head-txt);letter-spacing:-.5px}
+.tb-logo span{color:var(--accent-l)}
+.sep{width:1px;height:22px;background:var(--border)}
+.tb-ttl{color:var(--muted);font-size:.82rem}
+.tb-sp{flex:1}
+.btn{padding:6px 14px;border-radius:8px;font-size:.8rem;font-weight:600;
+  cursor:pointer;border:1px solid transparent;transition:all .15s;line-height:1.4}
+.btn-p{background:var(--accent);color:#fff;border-color:var(--accent)}
+.btn-p:hover{background:var(--accent-h)}
+.btn-g{background:transparent;color:var(--muted);border:1px solid var(--border)}
+.btn-g:hover{background:var(--surf2);color:var(--text)}
+.btn-d{background:transparent;color:var(--red);border:1px solid var(--border)}
+.btn-d:hover{background:var(--rbg)}
+.btn-sm{padding:4px 10px;font-size:.74rem;border-radius:6px}
+.bi{padding:5px 7px;border-radius:6px;background:transparent;border:1px solid var(--border);
+  color:var(--muted);cursor:pointer;font-size:.78rem;transition:all .15s}
+.bi:hover{background:var(--surf2);color:var(--text)}
+.badge{display:inline-block;font-size:.66rem;border-radius:4px;padding:2px 7px;font-weight:600}
+.bg{background:var(--gbg);color:var(--green)}
+.ba{background:var(--abg);color:var(--amber)}
+.bd{background:var(--border);color:var(--dim)}
+.bac{background:var(--accent-d);color:var(--accent-l)}
+.chip{font-size:.7rem;padding:2px 7px;border-radius:20px;border:1px solid var(--border);color:var(--dim)}
+
+/* ── Layout ── */
+.app{display:flex;flex:1;overflow:hidden}
+
+/* ── Sidebar ── */
+.sb{width:230px;flex-shrink:0;background:var(--surf);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;overflow:hidden}
+.sb-hd{padding:12px 14px 10px;border-bottom:1px solid var(--border)}
+.sb-hd p{font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--dim);margin-bottom:7px}
+.sb-tree{flex:1;overflow-y:auto;padding:6px}
+.tn-item{display:flex;align-items:center;gap:7px;padding:7px 9px;border-radius:8px;
+  cursor:pointer;transition:all .15s}
+.tn-item:hover{background:var(--surf2)}
+.tn-item.act{background:var(--accent-d);color:var(--accent-l)}
+.tn-item.act .tn-nm{color:var(--accent-l)}
+.tn-arr{width:12px;color:var(--dim);font-size:.68rem;text-align:center}
+.tn-ic{font-size:.95rem}
+.tn-nm{flex:1;font-size:.82rem;font-weight:500;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tn-cnt{font-size:.62rem;background:var(--border);color:var(--dim);border-radius:10px;padding:1px 5px}
+.tn-hid{font-size:.6rem;padding:1px 4px;border-radius:3px;background:var(--border);color:var(--dim)}
+.tn-ch{margin-left:14px;padding-left:9px;border-left:1px solid var(--border);margin-top:1px}
+
+/* ── Main ── */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+
+/* ── Menu view ── */
+#vMenu{display:flex;flex-direction:column;height:100%;overflow:hidden}
+.mhd{padding:18px 22px 0;border-bottom:1px solid var(--border)}
+.mhd-top{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.mhd-ic{font-size:1.7rem}
+.mhd-info h2{font-size:1.05rem;font-weight:700;color:var(--head-txt)}
+.mhd-info p{font-size:.76rem;color:var(--dim);margin-top:1px}
+.mhd-meta{flex:1;display:flex;justify-content:flex-end;gap:7px;align-items:center}
+.tabs{display:flex}
+.tab{padding:9px 16px;font-size:.82rem;font-weight:500;cursor:pointer;
+  border:none;background:transparent;color:var(--dim);border-bottom:2px solid transparent;transition:all .15s}
+.tab.act{color:var(--accent-l);border-bottom-color:var(--accent)}
+.tab:hover:not(.act){color:var(--text)}
+.tc{flex:1;overflow-y:auto;padding:20px 22px}
+
+/* Screen list */
+.sc-tb{display:flex;align-items:center;gap:9px;margin-bottom:14px}
+.sc-tb h3{font-size:.88rem;font-weight:600;flex:1}
+.sc-cards{display:flex;flex-direction:column;gap:9px}
+.sc-card{background:var(--surf2);border:1px solid var(--border);border-radius:var(--r);
+  padding:12px 16px;display:flex;align-items:center;gap:12px;cursor:pointer;transition:all .15s}
+.sc-card:hover{border-color:var(--accent);background:var(--sc-hover)}
+.sc-ic{width:38px;height:38px;border-radius:8px;background:var(--accent-d);
+  display:flex;align-items:center;justify-content:center;font-size:1.1rem;flex-shrink:0}
+.sc-inf{flex:1;min-width:0}
+.sc-nm{font-size:.87rem;font-weight:600;color:var(--head-txt);margin-bottom:3px}
+.sc-mt{display:flex;gap:7px;align-items:center}
+.sc-wc{font-size:.7rem;color:var(--dim)}
+.sc-ax{display:flex;gap:5px;flex-shrink:0}
+
+/* Permissions */
+.ps{margin-bottom:22px}
+.ps h3{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);margin-bottom:9px}
+.pt{width:100%;border-collapse:collapse;font-size:.81rem}
+.pt th{text-align:left;padding:7px 11px;color:var(--dim);font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--border)}
+.pt td{padding:9px 11px;border-bottom:1px solid var(--row-border)}
+.pt tr:hover td{background:var(--row-hover)}
+.pk{font-size:.66rem;padding:2px 7px;border-radius:20px;font-weight:600}
+.pk-r{background:#2d1b69;color:#a78bfa;transition:background .2s,color .2s}
+.pk-u{background:#1e3a5f;color:var(--sky);transition:background .2s,color .2s}
+.tog{width:34px;height:19px;border-radius:10px;border:none;cursor:pointer;
+  position:relative;transition:background .2s;flex-shrink:0;display:block}
+.tog.on{background:#16a34a}.tog.off{background:var(--border)}
+.tog::after{content:'';position:absolute;top:2px;width:15px;height:15px;
+  border-radius:50%;background:#fff;transition:left .2s}
+.tog.on::after{left:17px}.tog.off::after{left:2px}
+.apr{display:flex;gap:7px;align-items:center;margin-top:11px;flex-wrap:wrap}
+sel,.sel{background:var(--surf);border:1px solid var(--border);color:var(--text);
+  border-radius:8px;padding:6px 9px;font-size:.8rem;cursor:pointer}
+.sel:focus{outline:none;border-color:var(--accent)}
+
+/* Info form */
+.if{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.fg{display:flex;flex-direction:column;gap:5px}
+.fg.full{grid-column:1/-1}
+.fg label{font-size:.7rem;color:var(--dim);font-weight:500}
+.inp{background:var(--bg);border:1px solid var(--border);color:var(--text);
+  border-radius:8px;padding:7px 11px;font-size:.82rem;width:100%}
+.inp:focus{outline:none;border-color:var(--accent)}
+textarea.inp{resize:none}
+.ips{display:flex;gap:5px;flex-wrap:wrap}
+.ip-opt{font-size:1.3rem;padding:5px 7px;border-radius:7px;border:1px solid var(--border);
+  cursor:pointer;background:var(--bg);transition:all .15s}
+.ip-opt:hover,.ip-opt.sel{border-color:var(--accent);background:var(--accent-d)}
+
+/* ══════════════ DESIGNER ══════════════ */
+#vDes{display:none;height:100%;overflow:hidden;flex-direction:column}
+#vDes.show{display:flex}
+.db{display:flex;align-items:center;gap:9px;padding:0 18px;height:50px;
+  background:var(--surf);border-bottom:1px solid var(--border);flex-shrink:0}
+.db-back{display:flex;align-items:center;gap:5px;color:var(--muted);
+  font-size:.8rem;cursor:pointer;padding:5px 9px;border-radius:6px;border:none;
+  background:transparent;transition:all .15s}
+.db-back:hover{background:var(--surf2);color:var(--text)}
+.db-nm{font-size:.92rem;font-weight:700;color:var(--head-txt)}
+.des-body{flex:1;display:flex;overflow:hidden}
+
+/* Palette */
+.pal{width:170px;flex-shrink:0;background:var(--surf);border-right:1px solid var(--border);
+  padding:12px;overflow-y:auto;display:flex;flex-direction:column;gap:4px}
+.pal h3{font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--dim);margin-bottom:8px}
+.pi{display:flex;align-items:center;gap:7px;padding:8px 9px;border-radius:8px;
+  border:1px solid var(--border);background:var(--bg);cursor:grab;transition:all .15s}
+.pi:hover{border-color:var(--accent);background:var(--accent-d)}
+.pi:hover .pi-nm{color:var(--accent-l)}
+.pi-ic{font-size:1rem;flex-shrink:0}
+.pi-nm{font-size:.78rem;color:var(--muted);font-weight:500}
+.pi.dragging{opacity:.4}
+.pal-sep{height:1px;background:var(--border);margin:8px 0}
+.ds-info{font-size:.68rem;color:var(--dim);line-height:1.5;margin-top:4px}
+
+/* Canvas */
+.cv-wrap{flex:1;overflow:auto;padding:18px;background:var(--cv-bg)}
+.cv-grid{display:grid;grid-template-columns:repeat(12,1fr);gap:10px;
+  min-width:800px;min-height:calc(100vh - 120px);position:relative;align-content:start}
+.cv-empty{position:absolute;inset:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:8px;pointer-events:none;opacity:.5}
+.cv-empty p{font-size:.83rem;color:var(--dim)}
+.cv-empty .sub{font-size:.72rem;color:var(--border)}
+
+/* Widget on canvas */
+.wg{border:2px solid var(--border);border-radius:var(--r);background:var(--surf);
+  padding:13px;cursor:pointer;transition:border .15s;position:relative;overflow:hidden;
+  min-height:100px}
+.wg:hover{border-color:#475569}
+.wg.sel{border-color:var(--accent);box-shadow:0 0 0 3px rgba(79,70,229,.2)}
+.wg.drop-before{box-shadow:-4px 0 0 0 var(--accent)}
+.wg.drop-after{box-shadow:4px 0 0 0 var(--accent)}
+.wg-dh{position:absolute;top:6px;left:6px;color:var(--border);font-size:.85rem;cursor:grab}
+.wg-del{position:absolute;top:5px;right:5px;background:transparent;border:none;
+  color:var(--dim);cursor:pointer;font-size:.75rem;padding:2px 5px;border-radius:4px;display:none}
+.wg:hover .wg-del,.wg.sel .wg-del{display:block}
+.wg-del:hover{background:var(--rbg);color:var(--red)}
+.wg-ttl{font-size:.78rem;color:var(--muted);margin-bottom:8px;font-weight:600;
+  padding-left:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wg-ds{font-size:.62rem;color:var(--dim);margin-top:4px;display:flex;align-items:center;gap:4px}
+.wg-ds-dot{width:5px;height:5px;border-radius:50%}
+
+/* Resize handle */
+.rh{position:absolute;bottom:3px;right:3px;width:16px;height:16px;cursor:se-resize;
+  display:flex;align-items:flex-end;justify-content:flex-end;z-index:10}
+.rh::after{content:'◢';font-size:.7rem;color:var(--dim);line-height:1}
+.wg:hover .rh::after,.wg.sel .rh::after{color:var(--accent-l)}
+
+/* Widget content types */
+.kpi-val{font-size:1.7rem;font-weight:800;margin-bottom:3px}
+.kpi-sub{font-size:.72rem;color:var(--dim)}
+.kpi-trend{font-size:.75rem;margin-top:5px}
+svg.sp{display:block;width:100%;height:65px}
+.bars{display:flex;flex-direction:column;gap:4px;margin-top:2px}
+.bar-row{display:flex;align-items:center;gap:6px;font-size:.7rem}
+.bar-lbl{width:80px;text-align:right;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bar-trk{flex:1;background:var(--bg);border-radius:3px;height:11px}
+.bar-fill{height:100%;border-radius:3px;transition:width .4s}
+.bar-v{width:32px;text-align:right;color:var(--text)}
+.wt{width:100%;border-collapse:collapse;font-size:.7rem}
+.wt th{color:var(--dim);padding:3px 5px;border-bottom:1px solid var(--border);text-align:left;font-weight:500}
+.wt td{padding:3px 5px;border-bottom:1px solid var(--row-border);color:var(--muted)}
+.wg-txt{font-size:.82rem;color:var(--muted);line-height:1.6;font-style:italic}
+
+/* Config panel */
+.cp{width:230px;flex-shrink:0;background:var(--surf);border-left:1px solid var(--border);
+  overflow-y:auto;display:flex;flex-direction:column}
+.cp-hd{padding:12px 14px;border-bottom:1px solid var(--border);flex-shrink:0}
+.cp-hd h3{font-size:.78rem;font-weight:700;color:var(--muted)}
+.cp-bd{padding:14px;flex:1;overflow-y:auto}
+.cp-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;
+  color:var(--dim);font-size:.78rem;text-align:center;gap:7px;height:100%;padding:20px}
+.cg{margin-bottom:14px}
+.cg label{display:block;font-size:.7rem;color:var(--dim);margin-bottom:5px;font-weight:500}
+.co{display:flex;gap:5px;flex-wrap:wrap}
+.col-opt{width:20px;height:20px;border-radius:50%;cursor:pointer;border:2px solid transparent}
+.col-opt.sel,.col-opt:hover{border-color:#fff}
+.sp-opts{display:flex;gap:3px;flex-wrap:wrap}
+.sp-opt{padding:4px 8px;border-radius:5px;border:1px solid var(--border);background:var(--bg);
+  color:var(--dim);font-size:.72rem;cursor:pointer;transition:all .15s}
+.sp-opt.sel,.sp-opt:hover{border-color:var(--accent);color:var(--accent-l);background:var(--accent-d)}
+.cp-ft{padding:10px 14px;border-top:1px solid var(--border);flex-shrink:0}
+.ds-tag{display:inline-flex;align-items:center;gap:4px;font-size:.66rem;padding:2px 7px;
+  border-radius:4px;font-weight:600;margin-bottom:8px}
+.ds-sql{background:#1e3a5f;color:var(--sky)}
+.ds-xl{background:#064e3b;color:var(--green)}
+.ds-ml{background:#2d1b69;color:#a78bfa}
+.fields-list{display:flex;flex-direction:column;gap:4px}
+.field-item{display:flex;align-items:center;gap:6px;padding:5px 8px;
+  border-radius:6px;border:1px solid var(--border);background:var(--bg);cursor:pointer;transition:all .15s}
+.field-item:hover,.field-item.sel{border-color:var(--accent);background:var(--accent-d)}
+.field-key{flex:1;font-size:.74rem;color:var(--muted);font-family:monospace}
+.field-type{font-size:.62rem;padding:1px 5px;border-radius:3px}
+.ft-num{background:#1e3a5f;color:var(--sky)}
+.ft-str{background:#2d1b69;color:#a78bfa}
+.ft-dt{background:#064e3b;color:var(--green)}
+.axis-row{display:flex;gap:6px;align-items:center;margin-bottom:6px}
+.axis-lbl{font-size:.7rem;color:var(--dim);width:30px;flex-shrink:0}
+
+/* Modal */
+.ov{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:100;
+  display:none;align-items:center;justify-content:center}
+.ov.show{display:flex}
+.mo{background:var(--surf);border:1px solid var(--border);border-radius:14px;
+  width:460px;max-width:95vw;max-height:85vh;overflow:hidden;display:flex;flex-direction:column}
+.mo-hd{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:9px}
+.mo-hd h3{font-size:.95rem;font-weight:700;color:var(--head-txt);flex:1}
+.mo-cl{background:transparent;border:none;color:var(--dim);cursor:pointer;font-size:1.1rem;padding:2px 6px;border-radius:5px}
+.mo-cl:hover{background:var(--surf2)}
+.mo-bd{padding:20px;overflow-y:auto}
+.mo-ft{padding:12px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:7px}
+
+/* Toast */
+.toast{position:fixed;bottom:22px;right:22px;background:var(--surf);border:1px solid var(--border);
+  border-radius:9px;padding:11px 16px;font-size:.81rem;display:flex;align-items:center;gap:7px;
+  z-index:200;transform:translateY(100px);opacity:0;transition:all .3s;pointer-events:none;
+  border-left:3px solid var(--green)}
+.toast.show{transform:translateY(0);opacity:1}
+
+/* Hint banner */
+.hint{padding:9px 13px;border-radius:8px;font-size:.76rem;display:flex;gap:7px;margin-bottom:14px}
+.hint-b{background:#1e3a5f;border:1px solid #1d4ed8;color:var(--sky)}
+.hint-a{background:var(--abg);border:1px solid #92400e;color:var(--amber)}
+
+/* Drag ghost */
+.wg.dragging-wg{opacity:.3;border-style:dashed}
+.drop-zone-active{background:rgba(79,70,229,.08)}
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="tb">
+  <div class="tb-logo">HD<span>OS</span></div>
+  <div class="sep"></div>
+  <div class="tb-ttl">Report Menu Builder</div>
+  <div class="tb-sp"></div>
+  <span class="badge ba">🧪 Mockup v2 — drag &amp; drop + resize</span>
+  <button class="btn btn-g btn-sm" id="themeToggle" onclick="toggleTheme()" title="Chuyển giao diện sáng/tối" style="font-size:.92rem;padding:5px 10px">🌙</button>
+  <button class="btn btn-g btn-sm" onclick="showMo('moNewMenu')">+ Tạo menu</button>
+</div>
+
+<div class="app">
+
+<!-- SIDEBAR -->
+<aside class="sb">
+  <div class="sb-hd">
+    <p>Cây menu báo cáo</p>
+    <button class="btn btn-p btn-sm" style="width:100%" onclick="showMo('moNewMenu')">+ Thêm menu</button>
+  </div>
+  <div class="sb-tree" id="sbTree"></div>
+</aside>
+
+<!-- MAIN -->
+<div class="main">
+
+<!-- ── View: Menu Editor ── -->
+<div id="vMenu">
+  <div class="mhd">
+    <div class="mhd-top">
+      <span class="mhd-ic" id="mhIc">📊</span>
+      <div class="mhd-info">
+        <h2 id="mhNm">Kinh doanh</h2>
+        <p id="mhSl">/reports/kinh-doanh</p>
+      </div>
+      <div class="mhd-meta">
+        <span class="badge bac" id="mhSc">3 màn hình</span>
+        <span class="badge" id="mhVis">● Hiển thị</span>
+        <button class="btn btn-g btn-sm" onclick="switchTab('info',this);document.querySelectorAll('.tab').forEach(t=>t.classList.remove('act'));document.querySelectorAll('.tab')[2].classList.add('act')">✏ Sửa</button>
+      </div>
+    </div>
+    <div class="tabs">
+      <button class="tab act" onclick="switchTab('screens',this)">📋 Màn hình</button>
+      <button class="tab" onclick="switchTab('perms',this)">🔐 Phân quyền</button>
+      <button class="tab" onclick="switchTab('info',this)">⚙️ Thông tin</button>
+    </div>
+  </div>
+
+  <!-- Tab: Screens -->
+  <div class="tc" id="tc-screens">
+    <div class="hint hint-b">📊 Mỗi màn hình báo cáo là một trang gồm các widget (KPI, biểu đồ, bảng). Dữ liệu lấy từ Provider đăng ký trong hệ thống.</div>
+    <div class="sc-tb">
+      <h3 id="scTitle">Màn hình trong menu</h3>
+      <button class="btn btn-p btn-sm" onclick="openDes(null)">+ Tạo màn hình mới</button>
+    </div>
+    <div class="sc-cards" id="scCards"></div>
+  </div>
+
+  <!-- Tab: Permissions -->
+  <div class="tc" id="tc-perms" style="display:none">
+    <div class="hint hint-a">⚠️ Chỉ người có quyền <strong>Xem</strong> mới thấy menu này. Quyền <strong>Xuất</strong> cho phép tải Excel/PDF.</div>
+    <div class="ps">
+      <h3>Phân quyền theo Role</h3>
+      <table class="pt"><thead><tr><th>Role</th><th style="width:70px;text-align:center">Xem</th><th style="width:70px;text-align:center">Xuất</th><th style="width:40px"></th></tr></thead>
+      <tbody id="pRoleBody"></tbody></table>
+      <div class="apr">
+        <select class="sel" id="addRoleSel">
+          <option value="">-- Role --</option>
+          <option>admin</option><option>manager</option><option>operator</option><option>viewer</option><option>user</option>
+        </select>
+        <button class="btn btn-p btn-sm" onclick="addRolePerm()">+ Thêm</button>
+      </div>
+    </div>
+    <div class="ps">
+      <h3>Phân quyền theo User</h3>
+      <table class="pt"><thead><tr><th>User</th><th style="width:70px;text-align:center">Xem</th><th style="width:70px;text-align:center">Xuất</th><th style="width:40px"></th></tr></thead>
+      <tbody id="pUserBody"></tbody></table>
+      <div class="apr">
+        <input class="inp" id="addUserInp" placeholder="email hoặc username..." style="width:220px;padding:6px 10px">
+        <button class="btn btn-p btn-sm" onclick="addUserPerm()">+ Thêm</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab: Info -->
+  <div class="tc" id="tc-info" style="display:none">
+    <div class="if" id="infoForm"></div>
+  </div>
+</div>
+
+<!-- ── View: Screen Designer ── -->
+<div id="vDes">
+  <div class="db">
+    <button class="db-back" onclick="closeDes()">← Quay lại</button>
+    <div class="sep"></div>
+    <span class="db-nm" id="desTitle">Thiết kế màn hình</span>
+    <div class="tb-sp"></div>
+    <input class="inp" id="screenNameInp" style="width:230px;padding:5px 10px;font-size:.82rem" placeholder="Tên màn hình...">
+    <button class="btn btn-g btn-sm" onclick="toast('👁 Preview sẽ có sau khi kết nối backend')">👁 Preview</button>
+    <button class="btn btn-p btn-sm" onclick="saveSc()">💾 Lưu</button>
+  </div>
+  <div class="des-body">
+
+    <!-- Palette -->
+    <div class="pal">
+      <h3>Loại Widget</h3>
+      <div class="pi" draggable="true" ondragstart="palDS(event,'kpi')"><span class="pi-ic">🔢</span><span class="pi-nm">KPI Card</span></div>
+      <div class="pi" draggable="true" ondragstart="palDS(event,'line')"><span class="pi-ic">📈</span><span class="pi-nm">Line Chart</span></div>
+      <div class="pi" draggable="true" ondragstart="palDS(event,'bar')"><span class="pi-ic">📊</span><span class="pi-nm">Bar Chart</span></div>
+      <div class="pi" draggable="true" ondragstart="palDS(event,'pie')"><span class="pi-ic">🥧</span><span class="pi-nm">Pie Chart</span></div>
+      <div class="pi" draggable="true" ondragstart="palDS(event,'table')"><span class="pi-ic">📋</span><span class="pi-nm">Bảng dữ liệu</span></div>
+      <div class="pi" draggable="true" ondragstart="palDS(event,'text')"><span class="pi-ic">✏️</span><span class="pi-nm">Văn bản</span></div>
+      <div class="pal-sep"></div>
+      <h3 style="margin-bottom:7px">Nguồn dữ liệu</h3>
+      <select class="sel" id="palDsSel" style="width:100%;font-size:.76rem;padding:5px 7px" onchange="setPalDs(this.value)">
+        <option value="">-- Chọn provider --</option>
+        <optgroup label="SQL Provider">
+          <option value="sql.sales_monthly">Doanh thu theo tháng</option>
+          <option value="sql.top_products">Top sản phẩm</option>
+          <option value="sql.kpi_summary">KPI tổng hợp</option>
+          <option value="sql.orders_recent">Đơn hàng gần đây</option>
+          <option value="sql.regional_stats">Thống kê vùng</option>
+        </optgroup>
+        <optgroup label="Excel Provider">
+          <option value="excel.sales_dashboard">Excel: Sales Dashboard</option>
+        </optgroup>
+        <optgroup label="ML Provider (gRPC)">
+          <option value="ml.fraud.score">ML: Fraud Score</option>
+          <option value="ml.fraud.batchScore">ML: Batch Fraud Score</option>
+        </optgroup>
+      </select>
+      <div class="ds-info" id="palDsInfo">Chọn nguồn dữ liệu để xem các trường dữ liệu khả dụng.</div>
+    </div>
+
+    <!-- Canvas -->
+    <div class="cv-wrap" id="cvWrap"
+      ondragover="cvDragOver(event)" ondrop="cvDrop(event)">
+      <div class="cv-grid" id="cvGrid">
+        <div class="cv-empty" id="cvEmpty">
+          <div style="font-size:2.2rem">🎨</div>
+          <p>Canvas trống</p>
+          <p class="sub">Kéo widget từ bảng trái vào đây</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Config panel -->
+    <div class="cp" id="cpanel">
+      <div class="cp-hd"><h3>⚙️ Cấu hình widget</h3></div>
+      <div class="cp-bd" id="cpBody">
+        <div class="cp-empty"><span style="font-size:1.4rem">👆</span><p>Chọn một widget để cấu hình</p></div>
+      </div>
+      <div class="cp-ft" style="display:none" id="cpFt">
+        <button class="btn btn-d btn-sm" style="width:100%" onclick="delSel()">🗑 Xóa widget</button>
+      </div>
+    </div>
+
+  </div>
+</div><!-- /vDes -->
+
+</div><!-- /main -->
+</div><!-- /app -->
+
+<!-- MODAL: New Menu -->
+<div class="ov" id="moNewMenu" onclick="closeMoBack(event,'moNewMenu')">
+  <div class="mo">
+    <div class="mo-hd"><h3>Tạo menu mới</h3><button class="mo-cl" onclick="closeMo('moNewMenu')">✕</button></div>
+    <div class="mo-bd">
+      <div style="display:flex;flex-direction:column;gap:13px">
+        <div class="fg"><label>Icon</label><div class="ips" id="nmIconPicker"></div></div>
+        <div class="fg"><label>Tên menu *</label><input class="inp" id="nmName" placeholder="VD: Báo cáo Kinh doanh" oninput="autoSlug()"></div>
+        <div class="fg"><label>Slug</label>
+          <div style="display:flex;align-items:center;border:1px solid var(--border);border-radius:8px;overflow:hidden">
+            <span style="padding:7px 9px;background:var(--surf2);color:var(--dim);font-size:.76rem;border-right:1px solid var(--border)">/reports/</span>
+            <input class="inp" id="nmSlug" style="border:none;border-radius:0" placeholder="slug">
+          </div>
+        </div>
+        <div class="fg"><label>Menu cha</label>
+          <select class="sel" id="nmParent" style="width:100%">
+            <option value="">-- Không có (menu gốc) --</option>
+          </select>
+        </div>
+        <div class="fg"><label>Mô tả</label><textarea class="inp" id="nmDesc" rows="2" placeholder="Mô tả ngắn..."></textarea></div>
+        <div class="fg"><label>Hiển thị</label>
+          <div style="display:flex;align-items:center;gap:9px;padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg);cursor:pointer" onclick="toggleNmVis()">
+            <button class="tog on" id="nmVisTog"></button>
+            <span id="nmVisLbl" style="font-size:.8rem">Hiển thị công khai</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="mo-ft">
+      <button class="btn btn-g" onclick="closeMo('moNewMenu')">Hủy</button>
+      <button class="btn btn-p" onclick="saveMenu()">💾 Tạo menu</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"><span style="color:var(--green)">✓</span><span id="toastMsg"></span></div>
+
+<script>
+// ══════════════════════════════════════════════════════════════════════════════
+// DATA SOURCES REGISTRY
+// ══════════════════════════════════════════════════════════════════════════════
+const DS = {
+  'sql.sales_monthly':{label:'Doanh thu theo tháng',type:'SQL',provider:'request-api',
+    fields:[{k:'month',t:'date',l:'Tháng'},{k:'revenue',t:'num',l:'Doanh thu (triệu)'},{k:'target',t:'num',l:'Mục tiêu'},{k:'growth_pct',t:'num',l:'Tăng trưởng %'}],
+    compat:['line','bar'],
+    preview:{lbs:['T1','T2','T3','T4','T5','T6','T7','T8','T9','T10','T11','T12'],vals:[320,410,380,450,420,510,480,560,530,610,580,650]}},
+  'sql.top_products':{label:'Top sản phẩm',type:'SQL',provider:'request-api',
+    fields:[{k:'product_name',t:'str',l:'Sản phẩm'},{k:'revenue',t:'num',l:'Doanh thu'},{k:'quantity',t:'num',l:'Số lượng'},{k:'category',t:'str',l:'Danh mục'}],
+    compat:['bar','table','pie'],
+    preview:{rows:[['SP Alu 6061',920],['SP Thép CT3',780],['SP Nhựa PP',650],['SP Inox 304',540],['SP Đồng ĐC',410]]}},
+  'sql.kpi_summary':{label:'KPI tổng hợp',type:'SQL',provider:'request-api',
+    fields:[{k:'total_revenue',t:'num',l:'Tổng doanh thu'},{k:'growth_pct',t:'num',l:'Tăng trưởng %'},{k:'order_count',t:'num',l:'Số đơn hàng'},{k:'avg_order',t:'num',l:'Giá trị TB/đơn'}],
+    compat:['kpi'],
+    preview:{val:'2.47 tỷ',trend:'+18.4%',lbl:'Tổng doanh thu 2025'}},
+  'sql.orders_recent':{label:'Đơn hàng gần đây',type:'SQL',provider:'request-api',
+    fields:[{k:'order_id',t:'str',l:'Mã đơn'},{k:'customer',t:'str',l:'Khách hàng'},{k:'product',t:'str',l:'Sản phẩm'},{k:'amount',t:'num',l:'Giá trị'},{k:'date',t:'date',l:'Ngày'},{k:'status',t:'str',l:'Trạng thái'}],
+    compat:['table'],
+    preview:{cols:['Mã đơn','Khách hàng','Giá trị','Trạng thái'],rows:[['ORD-001','Cty ABC','120M','✅'],['ORD-002','Cty XYZ','85M','🚚'],['ORD-003','DN 123','64M','✅']]}},
+  'sql.regional_stats':{label:'Thống kê vùng',type:'SQL',provider:'request-api',
+    fields:[{k:'region',t:'str',l:'Vùng'},{k:'revenue',t:'num',l:'Doanh thu'},{k:'orders',t:'num',l:'Đơn hàng'},{k:'customers',t:'num',l:'Khách hàng'}],
+    compat:['bar','table','pie'],
+    preview:{rows:[['Miền Bắc',820],['Miền Trung',450],['Miền Nam',930],['Tây Nguyên',210]]}},
+  'excel.sales_dashboard':{label:'Excel: Sales Dashboard',type:'Excel',provider:'excel-provider',
+    fields:[{k:'month',t:'date',l:'Tháng'},{k:'revenue',t:'num',l:'Doanh thu'},{k:'product',t:'str',l:'Sản phẩm'},{k:'quantity',t:'num',l:'Số lượng'},{k:'region',t:'str',l:'Vùng'}],
+    compat:['line','bar','table','kpi','pie'],
+    preview:{lbs:['T1','T2','T3','T4','T5','T6'],vals:[280,350,310,420,390,480]}},
+  'ml.fraud.score':{label:'ML: Fraud Score',type:'gRPC',provider:'dotnet-provider',
+    fields:[{k:'transactionId',t:'str',l:'Transaction ID'},{k:'score',t:'num',l:'Fraud Score (0-1)'},{k:'riskBand',t:'str',l:'Mức độ rủi ro'},{k:'modelVersion',t:'str',l:'Model version'}],
+    compat:['kpi','table'],
+    preview:{val:'0.234',trend:'LOW RISK',lbl:'Fraud Score trung bình'}},
+  'ml.fraud.batchScore':{label:'ML: Batch Fraud Score',type:'gRPC',provider:'dotnet-provider',
+    fields:[{k:'transactionId',t:'str',l:'Transaction ID'},{k:'score',t:'num',l:'Fraud Score'},{k:'riskBand',t:'str',l:'Rủi ro'}],
+    compat:['bar','table'],
+    preview:{rows:[['TXN-001',0.12,'LOW'],['TXN-002',0.67,'HIGH'],['TXN-003',0.34,'MED']]}},
+};
+
+const ICONS=['📊','📈','📉','📋','📌','🗃️','⚙️','✅','🛡️','🏭','💼','🎯','🔍','📁','🌐','⭐'];
+const COLORS=['#4f46e5','#0ea5e9','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#f97316'];
+
+// ══════════════════════════════════════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════════════════════════════════════
+let S = {
+  menus:[
+    {id:'m1',name:'Kinh doanh',slug:'kinh-doanh',icon:'📊',desc:'Doanh thu, bán hàng',
+     visible:true,parentId:null,order:1,
+     screens:[
+       {id:'s1',name:'Dashboard doanh thu 2025',icon:'📊',status:'published',
+        widgets:[
+          {id:'w1',type:'kpi',title:'Tổng doanh thu',span:4,color:'#4ade80',ds:'sql.kpi_summary',valField:'total_revenue',trendField:'growth_pct'},
+          {id:'w2',type:'line',title:'Xu hướng doanh thu 12 tháng',span:8,color:'#0ea5e9',ds:'sql.sales_monthly',xField:'month',yField:'revenue'},
+          {id:'w3',type:'bar',title:'Top sản phẩm',span:6,color:'#0ea5e9',ds:'sql.top_products',xField:'product_name',yField:'revenue'},
+          {id:'w4',type:'table',title:'Đơn hàng gần đây',span:6,color:'#94a3b8',ds:'sql.orders_recent',cols:['order_id','customer','amount','status']},
+        ]},
+       {id:'s2',name:'So sánh doanh thu theo vùng',icon:'📈',status:'published',
+        widgets:[
+          {id:'w5',type:'bar',title:'Doanh thu theo vùng',span:8,color:'#8b5cf6',ds:'sql.regional_stats',xField:'region',yField:'revenue'},
+          {id:'w6',type:'kpi',title:'Tổng đơn hàng',span:4,color:'#fbbf24',ds:'sql.kpi_summary',valField:'order_count',trendField:'growth_pct'},
+        ]},
+       {id:'s3',name:'Top sản phẩm Q1',icon:'📊',status:'draft',
+        widgets:[
+          {id:'w7',type:'bar',title:'Top 10 sản phẩm',span:12,color:'#06b6d4',ds:'sql.top_products',xField:'product_name',yField:'revenue'},
+        ]},
+     ],
+     perms:{roles:[{r:'admin',view:true,exp:true},{r:'manager',view:true,exp:true},{r:'viewer',view:true,exp:false}],users:[{u:'nguyen.van.a@hdos.local',view:true,exp:false}]}
+    },
+    {id:'m2',name:'Vận hành',slug:'van-hanh',icon:'⚙️',desc:'Hiệu suất vận hành',
+     visible:true,parentId:null,order:2,
+     screens:[
+       {id:'s4',name:'Dashboard vận hành',icon:'⚙️',status:'published',
+        widgets:[
+          {id:'w8',type:'kpi',title:'Fraud Score TB',span:4,color:'#a78bfa',ds:'ml.fraud.score',valField:'score',trendField:'riskBand'},
+          {id:'w9',type:'table',title:'Giao dịch rủi ro cao',span:8,color:'#94a3b8',ds:'ml.fraud.batchScore',cols:['transactionId','score','riskBand']},
+        ]},
+     ],
+     perms:{roles:[{r:'admin',view:true,exp:true},{r:'operator',view:true,exp:false}],users:[]}
+    },
+    {id:'m2-1',name:'Chất lượng',slug:'van-hanh/chat-luong',icon:'✅',desc:'Kiểm tra chất lượng',
+     visible:true,parentId:'m2',order:1,
+     screens:[
+       {id:'s5',name:'Báo cáo chất lượng',icon:'✅',status:'published',
+        widgets:[
+          {id:'w10',type:'line',title:'Tỷ lệ lỗi theo tháng',span:12,color:'#ef4444',ds:'excel.sales_dashboard',xField:'month',yField:'revenue'},
+        ]},
+     ],
+     perms:{roles:[{r:'admin',view:true,exp:true}],users:[]}
+    },
+    {id:'m3',name:'Quản trị',slug:'quan-tri',icon:'🛡️',desc:'Dành riêng admin',
+     visible:false,parentId:null,order:3,screens:[],
+     perms:{roles:[{r:'admin',view:true,exp:true}],users:[]}
+    },
+  ],
+  selMenuId:'m1',curTab:'screens',
+  des:{open:false,scId:null,menuId:null,widgets:[],selWgId:null,palDs:''},
+  nmVis:true,nmIcon:'📊',
+};
+let dragSrc={fromPal:false,palType:null,fromCv:false,cvWgId:null,overWgId:null};
+let rsz=null; // resize state
+
+// ══════════════════════════════════════════════════════════════════════════════
+// HELPERS
+// ══════════════════════════════════════════════════════════════════════════════
+const getMenu=id=>S.menus.find(m=>m.id===id);
+const getCur=()=>getMenu(S.selMenuId);
+const uid=()=>'w'+Date.now()+Math.random().toString(36).slice(2,5);
+const slugify=s=>s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'')
+  .replace(/đ/g,'d').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
+const ftCls=t=>t==='num'?'ft-num':t==='date'?'ft-dt':'ft-str';
+const dsCls=t=>t==='SQL'?'ds-sql':t==='Excel'?'ds-xl':'ds-ml';
+
+// ══════════════════════════════════════════════════════════════════════════════
+// SIDEBAR
+// ══════════════════════════════════════════════════════════════════════════════
+function renderSB(){
+  const el=document.getElementById('sbTree');
+  const roots=S.menus.filter(m=>!m.parentId).sort((a,b)=>a.order-b.order);
+  el.innerHTML=roots.map(m=>renderNode(m)).join('');
+  const sel=document.getElementById('nmParent');
+  const prev=sel.value;
+  sel.innerHTML='<option value="">-- Không có (menu gốc) --</option>'+
+    S.menus.map(m=>`<option value="${m.id}">${m.icon} ${m.name}</option>`).join('');
+  sel.value=prev;
+}
+function renderNode(m){
+  const ch=S.menus.filter(c=>c.parentId===m.id);
+  const act=m.id===S.selMenuId;
+  return`<div class="tree-node">
+    <div class="tn-item${act?' act':''}" onclick="selMenu('${m.id}')">
+      <span class="tn-arr">${ch.length?'▾':''}</span>
+      <span class="tn-ic">${m.icon}</span>
+      <span class="tn-nm">${m.name}</span>
+      ${m.screens.length?`<span class="tn-cnt">${m.screens.length}</span>`:''}
+      ${!m.visible?'<span class="tn-hid">ẩn</span>':''}
+    </div>
+    ${ch.length?`<div class="tn-ch">${ch.map(c=>renderNode(c)).join('')}</div>`:''}
+  </div>`;
+}
+
+function selMenu(id){S.selMenuId=id;S.curTab='screens';renderSB();renderMenu();}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MENU VIEW
+// ══════════════════════════════════════════════════════════════════════════════
+function renderMenu(){
+  const m=getCur(); if(!m) return;
+  document.getElementById('mhIc').textContent=m.icon;
+  document.getElementById('mhNm').textContent=m.name;
+  document.getElementById('mhSl').textContent='/reports/'+m.slug;
+  document.getElementById('mhSc').textContent=`${m.screens.length} màn hình`;
+  const vb=document.getElementById('mhVis');
+  vb.textContent=m.visible?'● Hiển thị':'○ Ẩn';
+  vb.className='badge '+(m.visible?'bg':'bd');
+  renderScreens(m); renderPerms(m); renderInfo(m);
+  // restore tab
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('act'));
+  const tabs=['screens','perms','info'];
+  const ti=tabs.indexOf(S.curTab);
+  document.querySelectorAll('.tab')[ti]?.classList.add('act');
+  ['screens','perms','info'].forEach(t=>
+    document.getElementById('tc-'+t).style.display=t===S.curTab?'block':'none');
+}
+
+function switchTab(tab,btn){
+  S.curTab=tab;
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('act'));
+  btn.classList.add('act');
+  ['screens','perms','info'].forEach(t=>
+    document.getElementById('tc-'+t).style.display=t===tab?'block':'none');
+}
+
+// ── Screens tab ──
+function renderScreens(m){
+  document.getElementById('scTitle').textContent=`Màn hình trong "${m.name}"`;
+  const el=document.getElementById('scCards');
+  if(!m.screens.length){
+    el.innerHTML=`<div style="border:2px dashed var(--border);border-radius:var(--r);padding:36px;text-align:center;color:var(--dim)">
+      <div style="font-size:2rem;margin-bottom:7px">📋</div><p>Chưa có màn hình nào — nhấn <strong style="color:var(--text)">+ Tạo màn hình mới</strong></p></div>`;
+    return;
+  }
+  el.innerHTML=m.screens.map(s=>{
+    const dsSrc=[...new Set(s.widgets.map(w=>w.ds).filter(Boolean))];
+    const dsChips=dsSrc.map(d=>{
+      const ds=DS[d]; if(!ds) return '';
+      return`<span class="badge ${dsCls(ds.type)}" style="font-size:.62rem">${ds.type}: ${d.split('.').pop()}</span>`;
+    }).join('');
+    return`<div class="sc-card" onclick="openDes('${s.id}')">
+      <div class="sc-ic">${s.icon}</div>
+      <div class="sc-inf">
+        <div class="sc-nm">${s.name}</div>
+        <div class="sc-mt">
+          <span class="badge ${s.status==='published'?'bg':'ba'}">${s.status==='published'?'Đã xuất bản':'Bản nháp'}</span>
+          <span class="sc-wc">${s.widgets.length} widget</span>
+          ${dsChips}
+        </div>
+      </div>
+      <div class="sc-ax" onclick="event.stopPropagation()">
+        <button class="bi" title="Sửa" onclick="openDes('${s.id}')">✏</button>
+        <button class="bi" title="Nhân bản" onclick="dupSc('${s.id}')">⧉</button>
+        <button class="bi" title="Xóa" onclick="delSc('${s.id}')">🗑</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+function dupSc(sid){
+  const m=getCur(); const s=m.screens.find(x=>x.id===sid);
+  m.screens.push({...s,id:'s'+Date.now(),name:s.name+' (copy)',status:'draft',
+    widgets:s.widgets.map(w=>({...w,id:uid()}))});
+  renderScreens(m);renderSB();toast('Đã nhân bản màn hình');
+}
+function delSc(sid){
+  const m=getCur(); if(!confirm('Xóa màn hình này?')) return;
+  m.screens=m.screens.filter(s=>s.id!==sid);
+  renderScreens(m);renderSB();toast('Đã xóa màn hình');
+}
+
+// ── Perms tab ──
+function renderPerms(m){
+  const mkRow=(p,kind,keyField,removeKey)=>`<tr>
+    <td><div style="display:flex;align-items:center;gap:7px">
+      <span class="pk ${kind==='role'?'pk-r':'pk-u'}">${kind==='role'?'Role':'User'}</span>${p[keyField]}
+    </div></td>
+    <td style="text-align:center"><button class="tog ${p.view?'on':'off'}" onclick="togPerm('${kind}','${p[keyField]}','view',this)"></button></td>
+    <td style="text-align:center"><button class="tog ${p.exp?'on':'off'}" onclick="togPerm('${kind}','${p[keyField]}','exp',this)"></button></td>
+    <td><button class="bi btn-sm" style="color:var(--red)" onclick="rmPerm('${kind}','${p[keyField]}')">✕</button></td>
+  </tr>`;
+  document.getElementById('pRoleBody').innerHTML=m.perms.roles.map(p=>mkRow(p,'role','r','r')).join('');
+  document.getElementById('pUserBody').innerHTML=m.perms.users.map(p=>mkRow(p,'user','u','u')).join('');
+}
+function togPerm(kind,val,field,btn){
+  const m=getCur(); const arr=kind==='role'?m.perms.roles:m.perms.users;
+  const key=kind==='role'?'r':'u'; const p=arr.find(x=>x[key]===val);
+  if(p){p[field]=!p[field];btn.className='tog '+(p[field]?'on':'off');}
+}
+function rmPerm(kind,val){
+  const m=getCur();
+  if(kind==='role') m.perms.roles=m.perms.roles.filter(p=>p.r!==val);
+  else m.perms.users=m.perms.users.filter(p=>p.u!==val);
+  renderPerms(m);
+}
+function addRolePerm(){
+  const r=document.getElementById('addRoleSel').value; if(!r) return;
+  const m=getCur();
+  if(m.perms.roles.find(p=>p.r===r)){toast('Role đã có quyền');return;}
+  m.perms.roles.push({r,view:true,exp:false}); renderPerms(m);
+  document.getElementById('addRoleSel').value=''; toast('Đã thêm quyền role '+r);
+}
+function addUserPerm(){
+  const u=document.getElementById('addUserInp').value.trim(); if(!u) return;
+  const m=getCur();
+  if(m.perms.users.find(p=>p.u===u)){toast('User đã có quyền');return;}
+  m.perms.users.push({u,view:true,exp:false}); renderPerms(m);
+  document.getElementById('addUserInp').value=''; toast('Đã thêm quyền cho '+u);
+}
+
+// ── Info tab ──
+function renderInfo(m){
+  document.getElementById('infoForm').innerHTML=`
+    <div class="fg"><label>Tên menu</label><input class="inp" value="${m.name}" oninput="liveUpd('name',this.value)"></div>
+    <div class="fg"><label>Slug</label><input class="inp" value="${m.slug}" oninput="liveUpd('slug',this.value)"></div>
+    <div class="fg full"><label>Mô tả</label><textarea class="inp" rows="2" oninput="liveUpd('desc',this.value)">${m.desc||''}</textarea></div>
+    <div class="fg"><label>Icon</label>
+      <div class="ips">${ICONS.map(ic=>`<span class="ip-opt${ic===m.icon?' sel':''}" onclick="liveUpd('icon','${ic}');document.querySelectorAll('#infoForm .ip-opt').forEach(x=>x.classList.remove('sel'));this.classList.add('sel')">${ic}</span>`).join('')}</div>
+    </div>
+    <div class="fg"><label>Thứ tự</label><input class="inp" type="number" min="1" value="${m.order}" style="width:70px" oninput="liveUpd('order',+this.value)"></div>
+    <div class="fg full"><label>Trạng thái</label>
+      <div style="display:flex;align-items:center;gap:9px;padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg);cursor:pointer;width:fit-content" onclick="liveUpd('visible',!getCur().visible);renderMenu()">
+        <button class="tog ${m.visible?'on':'off'}"></button>
+        <span style="font-size:.8rem">${m.visible?'Hiển thị':'Ẩn'}</span>
+      </div>
+    </div>
+    <div class="fg full" style="flex-direction:row;justify-content:flex-end;gap:8px;margin-top:4px">
+      <button class="btn btn-d btn-sm" onclick="delMenu()">🗑 Xóa menu</button>
+      <button class="btn btn-p btn-sm" onclick="toast('✓ Đã lưu thay đổi')">💾 Lưu</button>
+    </div>`;
+}
+function liveUpd(f,v){
+  const m=getCur(); if(!m) return; m[f]=v;
+  if(f==='name') m.slug=slugify(v);
+  document.getElementById('mhIc').textContent=m.icon;
+  document.getElementById('mhNm').textContent=m.name;
+  document.getElementById('mhSl').textContent='/reports/'+m.slug;
+  renderSB();
+}
+function delMenu(){
+  const m=getCur(); if(!confirm(`Xóa menu "${m.name}"?`)) return;
+  S.menus=S.menus.filter(x=>x.id!==m.id&&x.parentId!==m.id);
+  S.selMenuId=S.menus[0]?.id||null;
+  renderSB(); if(S.selMenuId) renderMenu(); toast('Đã xóa menu');
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// NEW MENU MODAL
+// ══════════════════════════════════════════════════════════════════════════════
+function initIconPicker(){
+  document.getElementById('nmIconPicker').innerHTML=
+    ICONS.map(ic=>`<span class="ip-opt${ic==='📊'?' sel':''}" onclick="selNmIcon('${ic}')">${ic}</span>`).join('');
+}
+function selNmIcon(ic){
+  S.nmIcon=ic;
+  document.querySelectorAll('#nmIconPicker .ip-opt').forEach(x=>x.classList.remove('sel'));
+  document.querySelectorAll('#nmIconPicker .ip-opt').forEach(x=>{if(x.textContent===ic)x.classList.add('sel');});
+}
+function toggleNmVis(){
+  S.nmVis=!S.nmVis;
+  document.getElementById('nmVisTog').className='tog '+(S.nmVis?'on':'off');
+  document.getElementById('nmVisLbl').textContent=S.nmVis?'Hiển thị công khai':'Ẩn (chỉ admin)';
+}
+function autoSlug(){ document.getElementById('nmSlug').value=slugify(document.getElementById('nmName').value); }
+function saveMenu(){
+  const name=document.getElementById('nmName').value.trim();
+  if(!name){alert('Nhập tên menu');return;}
+  const id='m'+Date.now();
+  const parentId=document.getElementById('nmParent').value||null;
+  S.menus.push({id,name,slug:document.getElementById('nmSlug').value||slugify(name),
+    icon:S.nmIcon,desc:document.getElementById('nmDesc').value,
+    visible:S.nmVis,parentId,order:S.menus.filter(m=>m.parentId===parentId).length+1,
+    screens:[],perms:{roles:[{r:'admin',view:true,exp:true}],users:[]}});
+  S.selMenuId=id; closeMo('moNewMenu'); renderSB(); renderMenu();
+  document.getElementById('nmName').value='';document.getElementById('nmSlug').value='';
+  document.getElementById('nmDesc').value=''; S.nmIcon='📊'; initIconPicker();
+  toast('Đã tạo menu "'+name+'"');
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// DESIGNER — OPEN / CLOSE
+// ══════════════════════════════════════════════════════════════════════════════
+function openDes(scId){
+  const m=getCur(); S.des.menuId=m.id; S.des.scId=scId; S.des.selWgId=null;
+  const sc=scId?m.screens.find(s=>s.id===scId):null;
+  document.getElementById('screenNameInp').value=sc?sc.name:'';
+  document.getElementById('desTitle').textContent=sc?sc.name:'Màn hình mới';
+  S.des.widgets=sc?sc.widgets.map(w=>({...w})):[];
+  document.getElementById('vMenu').style.display='none';
+  document.getElementById('vDes').classList.add('show');
+  renderCV(); renderCP();
+}
+function closeDes(){
+  document.getElementById('vDes').classList.remove('show');
+  document.getElementById('vMenu').style.display='flex';
+}
+function saveSc(){
+  const m=getMenu(S.des.menuId);
+  const name=document.getElementById('screenNameInp').value.trim()||'Màn hình mới';
+  const wgs=S.des.widgets.map(w=>({...w}));
+  if(S.des.scId){
+    const sc=m.screens.find(s=>s.id===S.des.scId);
+    if(sc){sc.name=name;sc.widgets=wgs;sc.status='published';}
+  } else {
+    m.screens.push({id:'s'+Date.now(),name,icon:'📊',widgets:wgs,status:'draft'});
+  }
+  closeDes(); renderMenu(); renderSB(); toast('✓ Đã lưu "'+name+'"');
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// DESIGNER — CANVAS RENDER
+// ══════════════════════════════════════════════════════════════════════════════
+function renderCV(){
+  const grid=document.getElementById('cvGrid');
+  document.getElementById('cvEmpty').style.display=S.des.widgets.length?'none':'flex';
+  [...grid.querySelectorAll('.wg')].forEach(x=>x.remove());
+  S.des.widgets.forEach(wg=>{
+    const el=document.createElement('div');
+    el.className='wg'+(wg.id===S.des.selWgId?' sel':'');
+    el.style.gridColumn=`span ${wg.span||6}`;
+    el.dataset.wgId=wg.id;
+    el.setAttribute('draggable','true');
+    el.innerHTML=`
+      <span class="wg-dh" title="Kéo để sắp xếp">⠿</span>
+      <button class="wg-del" onclick="event.stopPropagation();delWg('${wg.id}')">✕</button>
+      <div class="wg-ttl">${wg.title}</div>
+      ${renderWgPrev(wg)}
+      ${wg.ds?`<div class="wg-ds"><span class="wg-ds-dot" style="background:${dsColor(wg.ds)}"></span>${DS[wg.ds]?.label||wg.ds}</div>`:''}
+      <div class="rh" data-wg="${wg.id}"></div>`;
+    el.onclick=e=>{if(e.target.classList.contains('rh')||e.target===el.querySelector('.wg-del'))return;
+      S.des.selWgId=wg.id; renderCV(); renderCP();};
+    el.ondragstart=e=>cvWgDS(e,wg.id);
+    el.ondragover=e=>cvWgDO(e,wg.id);
+    el.ondragleave=e=>cvWgDL(e,wg.id);
+    el.ondrop=e=>cvWgDrop(e,wg.id);
+    // Resize handle
+    const rh=el.querySelector('.rh');
+    rh.onmousedown=e=>{e.preventDefault();e.stopPropagation();startRsz(e,wg.id);};
+    grid.appendChild(el);
+  });
+}
+
+function dsColor(dsId){
+  const t=DS[dsId]?.type;
+  return t==='SQL'?'#38bdf8':t==='Excel'?'#4ade80':'#a78bfa';
+}
+
+function renderWgPrev(wg){
+  const ds=DS[wg.ds];
+  switch(wg.type){
+    case 'kpi':{
+      const p=ds?.preview||{};
+      const val=p.val||'—'; const trend=p.trend||''; const lbl=p.lbl||wg.title;
+      return`<div class="kpi-val" style="color:${wg.color}">${val}</div>
+        <div class="kpi-sub">${lbl}</div>
+        ${trend?`<div class="kpi-trend" style="color:${wg.color}">▲ ${trend}</div>`:''}`;
+    }
+    case 'line':{
+      const p=ds?.preview||{};
+      const vals=p.vals||[40,60,50,80,70,90,85,100,95,110,105,120];
+      const max=Math.max(...vals); const min=Math.min(...vals);
+      const pts=vals.map((v,i)=>{
+        const x=(i/(vals.length-1))*290+5;
+        const y=65-((v-min)/(max-min||1))*55;
+        return`${x},${y}`;}).join(' ');
+      return`<svg class="sp" viewBox="0 0 300 70" preserveAspectRatio="none">
+        <defs><linearGradient id="lg${wg.id}" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="${wg.color}" stop-opacity=".3"/>
+          <stop offset="100%" stop-color="${wg.color}" stop-opacity="0"/>
+        </linearGradient></defs>
+        <polyline points="${pts}" fill="none" stroke="${wg.color}" stroke-width="2"/>
+        <polygon points="${pts} 295,70 5,70" fill="url(#lg${wg.id})"/>
+      </svg>`;
+    }
+    case 'bar':{
+      const rows=(ds?.preview?.rows||[['A',80],['B',65],['C',50],['D',40]]).slice(0,5);
+      const max=Math.max(...rows.map(r=>r[1]));
+      return`<div class="bars">${rows.map(([l,v])=>`
+        <div class="bar-row">
+          <span class="bar-lbl">${l}</span>
+          <div class="bar-trk"><div class="bar-fill" style="width:${(v/max*100).toFixed(0)}%;background:${wg.color}"></div></div>
+          <span class="bar-v">${v}</span>
+        </div>`).join('')}</div>`;
+    }
+    case 'pie':{
+      const rows=(ds?.preview?.rows||[['A',40],['B',30],['C',20],['D',10]]).slice(0,4);
+      const total=rows.reduce((s,r)=>s+r[1],0);
+      let off=0; const segs=rows.map(([l,v],i)=>{
+        const pct=v/total; const dash=pct*283; const rest=283-dash;
+        const seg=`<circle cx="60" cy="60" r="45" fill="none" stroke="${COLORS[i]}" stroke-width="20" stroke-dasharray="${dash} ${rest}" stroke-dashoffset="${-off}" transform="rotate(-90 60 60)"/>`;
+        off+=dash; return seg;
+      });
+      return`<svg viewBox="0 0 120 120" style="width:100%;max-height:90px">
+        ${segs.join('')}
+        <circle cx="60" cy="60" r="30" fill="var(--surf)"/>
+        <text x="60" y="65" text-anchor="middle" fill="var(--text)" font-size="10" font-weight="700">
+          ${rows[0][0]}: ${(rows[0][1]/total*100).toFixed(0)}%</text>
+      </svg>`;
+    }
+    case 'table':{
+      const p=ds?.preview||{};
+      const cols=p.cols||['Col 1','Col 2','Col 3'];
+      const rows=p.rows||[['—','—','—'],['—','—','—']];
+      return`<table class="wt"><tr>${cols.map(c=>`<th>${c}</th>`).join('')}</tr>
+        ${rows.slice(0,3).map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</table>`;
+    }
+    case 'text':
+      return`<div class="wg-txt">Vùng văn bản tự do — tiêu đề section, chú thích, hướng dẫn...</div>`;
+    default: return '';
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// DRAG & DROP — palette → canvas
+// ══════════════════════════════════════════════════════════════════════════════
+function palDS(e,type){
+  dragSrc={fromPal:true,palType:type,fromCv:false,cvWgId:null,overWgId:null};
+  e.dataTransfer.effectAllowed='copy';
+  e.dataTransfer.setData('text/plain',type);
+  e.currentTarget.classList.add('dragging');
+  setTimeout(()=>e.currentTarget.classList.remove('dragging'),0);
+}
+
+function cvDragOver(e){
+  if(!dragSrc.fromPal&&!dragSrc.fromCv) return;
+  e.preventDefault(); e.dataTransfer.dropEffect=dragSrc.fromPal?'copy':'move';
+  document.getElementById('cvGrid').classList.add('drop-zone-active');
+}
+
+function cvDrop(e){
+  e.preventDefault();
+  document.getElementById('cvGrid').classList.remove('drop-zone-active');
+  // dropped on canvas background (not on a widget) → append at end
+  if(dragSrc.fromPal&&dragSrc.palType&&!e.target.closest('.wg')){
+    addWg(dragSrc.palType,null);
+  } else if(dragSrc.fromCv&&dragSrc.cvWgId&&!e.target.closest('.wg')){
+    // moved to end
+    const wgs=S.des.widgets;
+    const idx=wgs.findIndex(w=>w.id===dragSrc.cvWgId);
+    if(idx!==-1){const [wg]=wgs.splice(idx,1);wgs.push(wg);}
+    renderCV(); renderCP();
+  }
+  dragSrc={fromPal:false,palType:null,fromCv:false,cvWgId:null,overWgId:null};
+}
+
+// ── Canvas widget drag (reorder) ──
+function cvWgDS(e,wgId){
+  dragSrc={fromPal:false,palType:null,fromCv:true,cvWgId:wgId,overWgId:null};
+  e.dataTransfer.effectAllowed='move';
+  e.dataTransfer.setData('text/plain',wgId);
+  setTimeout(()=>document.querySelector(`[data-wg-id="${wgId}"]`)?.classList.add('dragging-wg'),0);
+}
+
+function cvWgDO(e,targetId){
+  if((!dragSrc.fromCv&&!dragSrc.fromPal)||dragSrc.cvWgId===targetId) return;
+  e.preventDefault(); e.stopPropagation();
+  dragSrc.overWgId=targetId;
+  // Show indicator
+  document.querySelectorAll('.wg').forEach(el=>{
+    el.classList.remove('drop-before','drop-after');
+  });
+  const tEl=document.querySelector(`[data-wg-id="${targetId}"]`);
+  if(tEl){
+    const rect=tEl.getBoundingClientRect();
+    const mid=rect.left+rect.width/2;
+    tEl.classList.add(e.clientX<mid?'drop-before':'drop-after');
+  }
+}
+
+function cvWgDL(e,targetId){
+  document.querySelector(`[data-wg-id="${targetId}"]`)?.classList.remove('drop-before','drop-after');
+}
+
+function cvWgDrop(e,targetId){
+  e.preventDefault(); e.stopPropagation();
+  document.querySelectorAll('.wg').forEach(el=>el.classList.remove('drop-before','drop-after','dragging-wg'));
+  const tEl=document.querySelector(`[data-wg-id="${targetId}"]`);
+  const rect=tEl?.getBoundingClientRect();
+  const insertBefore=rect?e.clientX<(rect.left+rect.width/2):true;
+
+  if(dragSrc.fromPal&&dragSrc.palType){
+    addWg(dragSrc.palType,targetId,insertBefore);
+  } else if(dragSrc.fromCv&&dragSrc.cvWgId&&dragSrc.cvWgId!==targetId){
+    const wgs=S.des.widgets;
+    const srcIdx=wgs.findIndex(w=>w.id===dragSrc.cvWgId);
+    const tgtIdx=wgs.findIndex(w=>w.id===targetId);
+    if(srcIdx!==-1&&tgtIdx!==-1){
+      const [wg]=wgs.splice(srcIdx,1);
+      const newIdx=wgs.findIndex(w=>w.id===targetId);
+      wgs.splice(insertBefore?newIdx:newIdx+1,0,wg);
+    }
+    renderCV(); renderCP();
+  }
+  dragSrc={fromPal:false,palType:null,fromCv:false,cvWgId:null,overWgId:null};
+}
+
+function addWg(type,beforeId,insertBefore=true){
+  const ds=S.des.palDs||null;
+  const wg={id:uid(),type,title:wgDefaultTitle(type),span:wgDefaultSpan(type),
+    color:COLORS[S.des.widgets.length%COLORS.length],ds:ds||'',
+    ...(type==='kpi'?{valField:'',trendField:''}:{}),
+    ...(type==='line'||type==='bar'?{xField:'',yField:''}:{}),
+    ...(type==='table'?{cols:[]}:{}),
+  };
+  if(beforeId){
+    const idx=S.des.widgets.findIndex(w=>w.id===beforeId);
+    S.des.widgets.splice(insertBefore?idx:idx+1,0,wg);
+  } else {
+    S.des.widgets.push(wg);
+  }
+  S.des.selWgId=wg.id;
+  document.getElementById('cvEmpty').style.display='none';
+  renderCV(); renderCP();
+}
+
+function wgDefaultTitle(t){return{kpi:'KPI Card',line:'Line Chart',bar:'Bar Chart',pie:'Pie Chart',table:'Bảng dữ liệu',text:'Văn bản'}[t]||'Widget';}
+function wgDefaultSpan(t){return{kpi:4,line:8,bar:6,pie:4,table:12,text:6}[t]||6;}
+
+function delWg(id){
+  S.des.widgets=S.des.widgets.filter(w=>w.id!==id);
+  if(S.des.selWgId===id){S.des.selWgId=null;renderCP();}
+  renderCV();
+  if(!S.des.widgets.length) document.getElementById('cvEmpty').style.display='flex';
+}
+function delSel(){ if(S.des.selWgId) delWg(S.des.selWgId); }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// RESIZE
+// ══════════════════════════════════════════════════════════════════════════════
+function startRsz(e,wgId){
+  const wg=S.des.widgets.find(w=>w.id===wgId);
+  if(!wg) return;
+  const grid=document.getElementById('cvGrid');
+  rsz={wgId,startX:e.clientX,startSpan:wg.span,colW:grid.offsetWidth/12};
+  S.des.selWgId=wgId;
+  document.body.style.cursor='se-resize';
+  document.onmousemove=onRsz;
+  document.onmouseup=endRsz;
+}
+function onRsz(e){
+  if(!rsz) return;
+  const delta=e.clientX-rsz.startX;
+  const newSpan=Math.max(2,Math.min(12,Math.round(rsz.startSpan+delta/rsz.colW)));
+  const wg=S.des.widgets.find(w=>w.id===rsz.wgId);
+  if(wg&&wg.span!==newSpan){
+    wg.span=newSpan;
+    const el=document.querySelector(`[data-wg-id="${rsz.wgId}"]`);
+    if(el){el.style.gridColumn=`span ${newSpan}`;}
+    // update span opts in config panel live
+    document.querySelectorAll('.sp-opt').forEach(o=>{
+      o.classList.toggle('sel',+o.dataset.span===newSpan);
+    });
+  }
+}
+function endRsz(){
+  if(!rsz) return;
+  document.body.style.cursor='';
+  document.onmousemove=null; document.onmouseup=null;
+  rsz=null; renderCV(); renderCP();
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// CONFIG PANEL
+// ══════════════════════════════════════════════════════════════════════════════
+function setPalDs(dsId){
+  S.des.palDs=dsId;
+  const ds=DS[dsId];
+  const info=document.getElementById('palDsInfo');
+  if(!ds){info.textContent='Chọn nguồn dữ liệu để xem trường dữ liệu.';return;}
+  info.innerHTML=`<span class="ds-tag ${dsCls(ds.type)}">${ds.type} · ${ds.provider}</span><br>
+    Trường: ${ds.fields.map(f=>`<code style="color:var(--muted);font-size:.68rem">${f.k}</code>`).join(', ')}`;
+}
+
+function renderCP(){
+  const cpBody=document.getElementById('cpBody');
+  const cpFt=document.getElementById('cpFt');
+  const wg=S.des.widgets.find(w=>w.id===S.des.selWgId);
+  if(!wg){
+    cpBody.innerHTML='<div class="cp-empty"><span style="font-size:1.4rem">👆</span><p>Chọn một widget để cấu hình</p></div>';
+    cpFt.style.display='none'; return;
+  }
+  cpFt.style.display='block';
+  const ds=DS[wg.ds];
+  const dsTag=ds?`<span class="ds-tag ${dsCls(ds.type)}">${ds.type}: ${ds.label}</span>`:'';
+  const fieldOpts=(flds,cur,onch)=>flds.map(f=>`
+    <option value="${f.k}" ${f.k===cur?'selected':''}>${f.l} (${f.t})</option>`).join('');
+
+  let axisHtml='';
+  if(ds){
+    const numFields=ds.fields.filter(f=>f.t==='num');
+    const allFields=ds.fields;
+    if(wg.type==='kpi'){
+      axisHtml=`<div class="cg"><label>Giá trị chính</label>
+        <select class="sel" style="width:100%;font-size:.76rem" onchange="updWg('valField',this.value)">
+          ${fieldOpts(numFields,wg.valField)}</select></div>
+        <div class="cg"><label>Xu hướng / So sánh</label>
+        <select class="sel" style="width:100%;font-size:.76rem" onchange="updWg('trendField',this.value)">
+          ${fieldOpts(allFields,wg.trendField)}</select></div>`;
+    } else if(wg.type==='line'||wg.type==='bar'){
+      axisHtml=`<div class="cg"><label>Trục X (danh mục)</label>
+        <select class="sel" style="width:100%;font-size:.76rem" onchange="updWg('xField',this.value)">
+          ${fieldOpts(allFields,wg.xField)}</select></div>
+        <div class="cg"><label>Trục Y (giá trị)</label>
+        <select class="sel" style="width:100%;font-size:.76rem" onchange="updWg('yField',this.value)">
+          ${fieldOpts(numFields,wg.yField)}</select></div>`;
+    } else if(wg.type==='table'){
+      const curCols=wg.cols||[];
+      axisHtml=`<div class="cg"><label>Cột hiển thị</label>
+        <div class="fields-list">${ds.fields.map(f=>`
+          <div class="field-item${curCols.includes(f.k)?' sel':''}" onclick="toggleCol('${f.k}',this)">
+            <span class="field-key">${f.k}</span>
+            <span class="field-type ${ftCls(f.t)}">${f.t}</span>
+          </div>`).join('')}</div></div>`;
+    } else if(wg.type==='pie'){
+      axisHtml=`<div class="cg"><label>Danh mục</label>
+        <select class="sel" style="width:100%;font-size:.76rem" onchange="updWg('catField',this.value)">
+          ${fieldOpts(allFields,wg.catField)}</select></div>
+        <div class="cg"><label>Giá trị</label>
+        <select class="sel" style="width:100%;font-size:.76fs" onchange="updWg('valField',this.value)">
+          ${fieldOpts(numFields,wg.valField)}</select></div>`;
+    }
+  }
+
+  cpBody.innerHTML=`
+    <div class="cg"><label>Tiêu đề widget</label>
+      <input class="inp" value="${wg.title}" oninput="updWgLive('title',this.value)"></div>
+    <div class="cg"><label>Nguồn dữ liệu</label>
+      ${dsTag}
+      <select class="sel" style="width:100%;font-size:.76rem;margin-top:5px" onchange="updWgDs(this.value)">
+        <option value="">-- Chọn data source --</option>
+        ${Object.entries(DS).map(([k,v])=>`<option value="${k}"${k===wg.ds?' selected':''}>${v.label}</option>`).join('')}
+      </select></div>
+    ${axisHtml}
+    <div class="cg"><label>Độ rộng (/ 12 cột)</label>
+      <div class="sp-opts">
+        ${[2,3,4,6,8,12].map(n=>`<div class="sp-opt${wg.span===n?' sel':''}" data-span="${n}" onclick="updWgSpan(${n})">${n}</div>`).join('')}
+      </div></div>
+    <div class="cg"><label>Màu sắc</label>
+      <div class="co">${COLORS.map(c=>`<div class="col-opt${wg.color===c?' sel':''}" style="background:${c}" onclick="updWgColor('${c}',this)" title="${c}"></div>`).join('')}</div></div>
+    <div style="padding:8px;background:var(--bg);border-radius:7px;font-size:.7rem;color:var(--dim)">
+      Type: <strong style="color:var(--text)">${wg.type.toUpperCase()}</strong> &nbsp;|&nbsp;
+      ID: <code>${wg.id}</code></div>`;
+}
+
+function updWgLive(f,v){
+  const wg=S.des.widgets.find(w=>w.id===S.des.selWgId); if(!wg) return;
+  wg[f]=v;
+  const el=document.querySelector(`[data-wg-id="${wg.id}"] .wg-ttl`);
+  if(el) el.textContent=v;
+}
+function updWg(f,v){
+  const wg=S.des.widgets.find(w=>w.id===S.des.selWgId); if(!wg) return;
+  wg[f]=v; renderCV(); renderCP();
+}
+function updWgDs(dsId){
+  const wg=S.des.widgets.find(w=>w.id===S.des.selWgId); if(!wg) return;
+  wg.ds=dsId; wg.xField=''; wg.yField=''; wg.valField=''; wg.trendField=''; wg.cols=[];
+  renderCV(); renderCP();
+}
+function updWgSpan(n){
+  const wg=S.des.widgets.find(w=>w.id===S.des.selWgId); if(!wg) return;
+  wg.span=n; renderCV(); renderCP();
+}
+function updWgColor(c,el){
+  const wg=S.des.widgets.find(w=>w.id===S.des.selWgId); if(!wg) return;
+  wg.color=c;
+  document.querySelectorAll('.col-opt').forEach(x=>x.classList.remove('sel'));
+  el.classList.add('sel');
+  renderCV();
+}
+function toggleCol(key,el){
+  const wg=S.des.widgets.find(w=>w.id===S.des.selWgId); if(!wg) return;
+  if(!wg.cols) wg.cols=[];
+  if(wg.cols.includes(key)){wg.cols=wg.cols.filter(k=>k!==key);el.classList.remove('sel');}
+  else{wg.cols.push(key);el.classList.add('sel');}
+  renderCV();
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MODAL UTILS
+// ══════════════════════════════════════════════════════════════════════════════
+function showMo(id){document.getElementById(id).classList.add('show');}
+function closeMo(id){document.getElementById(id).classList.remove('show');}
+function closeMoBack(e,id){if(e.target===e.currentTarget)closeMo(id);}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// TOAST
+// ══════════════════════════════════════════════════════════════════════════════
+function toast(msg){
+  const el=document.getElementById('toast');
+  document.getElementById('toastMsg').textContent=msg;
+  el.classList.add('show');
+  setTimeout(()=>el.classList.remove('show'),2200);
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// THEME (light / dark)
+// ══════════════════════════════════════════════════════════════════════════════
+function toggleTheme(){
+  const html=document.documentElement;
+  html.classList.add('theme-transitioning');
+  const isLight=html.classList.toggle('light');
+  const btn=document.getElementById('themeToggle');
+  btn.textContent=isLight?'☀️':'🌙';
+  btn.title=isLight?'Chuyển sang giao diện tối':'Chuyển sang giao diện sáng';
+  localStorage.setItem('hdos-theme',isLight?'light':'dark');
+  setTimeout(()=>html.classList.remove('theme-transitioning'),280);
+}
+
+// Apply saved preference immediately
+(function(){
+  const saved=localStorage.getItem('hdos-theme');
+  // Also respect OS preference if no saved setting
+  const preferLight=saved?saved==='light':window.matchMedia('(prefers-color-scheme: light)').matches;
+  if(preferLight){
+    document.documentElement.classList.add('light');
+  }
+})();
+
+// ══════════════════════════════════════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════════════════════════════════════
+initIconPicker();
+renderSB();
+renderMenu();
+// Sync toggle button icon after DOM ready
+(function(){
+  const btn=document.getElementById('themeToggle');
+  if(btn){
+    const isLight=document.documentElement.classList.contains('light');
+    btn.textContent=isLight?'☀️':'🌙';
+    btn.title=isLight?'Chuyển sang giao diện tối':'Chuyển sang giao diện sáng';
+  }
+})();
+</script>
+</body>
+</html>
