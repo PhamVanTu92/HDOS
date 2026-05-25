@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace ReportingPlatform.EventProcessor.Services;
 
 /// <summary>
@@ -8,6 +10,9 @@ namespace ReportingPlatform.EventProcessor.Services;
 /// </summary>
 internal sealed class EventProcessorService
 {
+    private static readonly JsonSerializerOptions _jsonOpts =
+        new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+
     private readonly IEventSubscriptionRepository _subscriptions;
     private readonly IHubContext<MainHub, IMainHubClient> _hub;
     private readonly IConnectionMultiplexer _redis;
@@ -73,6 +78,27 @@ internal sealed class EventProcessorService
                 _logger.LogWarning(ex,
                     "Failed to publish cache invalidation for {TenantId}/{DashCode}/{WidgetId}",
                     evt.TenantId, sub.DashboardCode, sub.WidgetId);
+            }
+
+            // SSE widget-event: publish to rp:sse-widget-event:{group} so browsers
+            // connected to GET /sse/events with ?widgetChannel={group} receive WidgetStale.
+            try
+            {
+                var ssePayload = JsonSerializer.Serialize(new
+                {
+                    channel   = group,
+                    reason    = hint.Reason,
+                    updatedAt = hint.UpdatedAt,
+                }, _jsonOpts);
+
+                await _redis.GetSubscriber().PublishAsync(
+                    RedisChannel.Literal($"rp:sse-widget-event:{group}"),
+                    ssePayload);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex,
+                    "Failed to publish SSE widget event for group {Group}", group);
             }
         }
     }

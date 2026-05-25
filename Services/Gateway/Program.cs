@@ -38,13 +38,16 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         // nhưng Docker container không reach được host LAN IP qua published port.
         opts.BackchannelHttpHandler = new KeycloakInternalHandler(publicIssuer);
 
-        // SignalR WebSocket không thể set Authorization header —
+        // EventSource (SSE) và SignalR WebSocket không thể set Authorization header —
         // token được truyền qua query string ?access_token=...
+        // Cần extract ở đây trước khi Gateway JWT middleware validate,
+        // nếu không request sẽ bị 401 tại Gateway trước khi tới backend.
         opts.Events = new JwtBearerEvents
         {
             OnMessageReceived = ctx =>
             {
-                if (ctx.HttpContext.Request.Path.StartsWithSegments("/hubs"))
+                var path = ctx.HttpContext.Request.Path;
+                if (path.StartsWithSegments("/hubs") || path.StartsWithSegments("/sse"))
                 {
                     var token = ctx.Request.Query["access_token"].ToString();
                     if (!string.IsNullOrEmpty(token)) ctx.Token = token;
@@ -70,7 +73,7 @@ builder.Services.AddAuthorization(opts =>
 
 // ------------------------------------------------------------------
 // CORS — global config, per-environment origin allowlist (§7)
-// AllowCredentials() required for SignalR WebSocket auth.
+// AllowCredentials() required for SSE EventSource and SignalR WebSocket.
 // Backends set AllowAnyOrigin() but are not directly reachable.
 // ------------------------------------------------------------------
 

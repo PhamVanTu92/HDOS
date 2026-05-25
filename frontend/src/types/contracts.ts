@@ -67,10 +67,12 @@ export interface RequestCancelledEvent {
 }
 
 export interface WidgetStaleEvent {
+  /** Widget group channel, e.g. "widget:main-dashboard:main-dashboard" */
   channel: string;
-  widgetId: string;
-  operation: string;
-  params: Record<string, unknown>;
+  /** Stale reason constant, e.g. "data.updated" */
+  reason?: string;
+  /** ISO timestamp of the data change that triggered the stale signal */
+  updatedAt?: string;
 }
 
 // ─── Operation response shapes ────────────────────────────────────────────────

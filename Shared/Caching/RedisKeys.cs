@@ -48,4 +48,14 @@ public static class RedisKeys
     // SSE terminal pub/sub channel: ResponseRouter publishes here to close open SSE streams.
     // Channel: rp:sse-terminal:{requestId}
     public static string SseTerminal(string requestId) => $"rp:sse-terminal:{requestId}";
+
+    // Global user-event SSE channel: ResponseRouter publishes terminal results here for
+    // /sse/events clients (SSE alternative to SignalR push).
+    // Channel: rp:sse-user-event:{userId}
+    public static string SseUserEvent(string userId) => $"rp:sse-user-event:{userId}";
+
+    // Global widget-event SSE channel: Event.Processor publishes WidgetStale here for
+    // /sse/events clients that subscribed to a widget channel.
+    // Channel: rp:sse-widget-event:{widgetChannel}  e.g. "widget:main-dashboard:main-dashboard"
+    public static string SseWidgetEvent(string widgetChannel) => $"rp:sse-widget-event:{widgetChannel}";
 }

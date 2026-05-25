@@ -1,40 +1,34 @@
 import { useEffect, useRef } from 'react';
 import { useAuth } from 'react-oidc-context';
 import {
-  signalRClient,
-  type SignalREventMap,
-  type SignalREventHandler,
-} from '../api/signalr';
+  sseClient,
+  type SseEventMap,
+  type SseEventHandler,
+} from '../api/sse';
+
+// ── Re-exported type aliases for backward-compat with existing consumers ──────
+export type SignalREventMap = SseEventMap;
+export type SignalREventHandler<K extends keyof SignalREventMap> = SseEventHandler<K>;
 
 /**
- * Connects to the SignalR hub when the user is authenticated
- * and disconnects on logout / unmount.
+ * Opens the SSE event stream when the user is authenticated and closes it on
+ * logout / unmount.  Also reconnects with a fresh token after every Keycloak
+ * silent renewal so the backend always receives a valid JWT.
  *
- * Also handles proactive token-aware reconnection:
- *   - oidc-client-ts fires `userLoaded` after every silent token renewal.
- *   - On that event we explicitly reconnect SignalR so the hub receives
- *     a fresh JWT before the old one expires, avoiding a transient 401
- *     that would otherwise force an unplanned auto-reconnect cycle.
- *
- * Call this ONCE at a high level in the component tree (e.g. Layout).
+ * Call this ONCE near the top of the component tree (e.g. Layout).
  */
 export function useSignalRConnection() {
   const auth = useAuth();
   const connected = useRef(false);
 
-  // ── Token auto-refresh: reconnect SignalR when Keycloak renews the token ──
+  // ── Token refresh: reopen EventSource with the new token ───────────────────
   useEffect(() => {
-    /**
-     * Fired by oidc-client-ts after every successful silent renewal.
-     * At this point sessionStorage already contains the new access_token,
-     * so signalRClient.reconnect() picks it up via accessTokenFactory.
-     */
     const onUserLoaded = () => {
       // Skip if we haven't established the first connection yet.
       if (!connected.current) return;
-      signalRClient.reconnect().catch((err) => {
-        console.warn('[SignalR] Reconnect after token refresh failed:', err);
-      });
+      // _open() closes the old EventSource and creates a new one with the
+      // fresh token embedded in the URL query string.
+      sseClient.reconnect();
     };
 
     auth.events.addUserLoaded(onUserLoaded);
@@ -43,48 +37,46 @@ export function useSignalRConnection() {
     };
   }, [auth.events]);
 
-  // ── SignalR connection lifecycle ───────────────────────────────────────────
+  // ── SSE connection lifecycle ───────────────────────────────────────────────
   useEffect(() => {
     if (!auth.isAuthenticated || connected.current) return;
 
-    let cancelled = false;
-
-    signalRClient.connect().then(() => {
-      if (!cancelled) connected.current = true;
-    }).catch((err) => {
-      console.error('[SignalR] Failed to connect:', err);
-    });
+    connected.current = true;
+    sseClient.connect();
 
     return () => {
-      cancelled = true;
       connected.current = false;
-      signalRClient.disconnect();
+      sseClient.disconnect();
     };
   }, [auth.isAuthenticated]);
 }
 
 /**
- * Subscribe to a SignalR event.
- * The handler reference is stable — it can be an inline function.
+ * Subscribe to an SSE event.  The handler reference is stable — it can be an
+ * inline function.  Uses a ref internally so the subscription does not change
+ * on every render even if the handler closure captures changing values.
  */
 export function useSignalREvent<K extends keyof SignalREventMap>(
   event: K,
   handler: SignalREventHandler<K>,
   enabled = true,
 ) {
-  // Keep handler in a ref to avoid re-subscribing when it changes identity.
   const handlerRef = useRef(handler);
   handlerRef.current = handler;
 
   useEffect(() => {
     if (!enabled) return;
-    const stableHandler: SignalREventHandler<K> = (payload) =>
+    const stableHandler: SseEventHandler<K> = (payload) =>
       handlerRef.current(payload);
-    return signalRClient.on(event, stableHandler);
+    return sseClient.on(event, stableHandler);
   }, [event, enabled]);
 }
 
-/** Subscribe to a widget channel and optionally handle WidgetStale. */
+/**
+ * Subscribe to WidgetStale events for a specific widget channel.
+ * Tells the SSE client to include this channel when (re)opening the stream so
+ * the server fans out WidgetStale events to this connection.
+ */
 export function useWidgetSubscription(
   channel: string,
   onStale?: SignalREventHandler<'WidgetStale'>,
@@ -93,9 +85,9 @@ export function useWidgetSubscription(
   useEffect(() => {
     if (!enabled || !channel) return;
 
-    signalRClient.subscribeWidget(channel);
+    sseClient.subscribeWidget(channel);
     return () => {
-      signalRClient.unsubscribeWidget(channel);
+      sseClient.unsubscribeWidget(channel);
     };
   }, [channel, enabled]);
 

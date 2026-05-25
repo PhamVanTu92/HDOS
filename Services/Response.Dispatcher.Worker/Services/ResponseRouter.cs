@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace ReportingPlatform.ResponseDispatcher.Services;
 
@@ -15,6 +16,10 @@ namespace ReportingPlatform.ResponseDispatcher.Services;
 /// </summary>
 public sealed class ResponseRouter
 {
+    private static readonly JsonSerializerOptions _jsonOpts =
+        new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull };
+
     private readonly IHubContext<MainHub, IMainHubClient> _hub;
     private readonly OwnerStore      _ownerStore;
     private readonly ResultStore     _resultStore;
@@ -50,6 +55,14 @@ public sealed class ResponseRouter
         // Step 2: Push via SignalR (type-safe, no string method names)
         var push = MapToPushMessage(msg);
         await PushToTargetAsync(owner, msg.Status, push, ct);
+
+        // Step 2.5: Publish to SSE user-event stream (JSON) for browser clients using
+        // EventSource instead of SignalR / MessagePack. Mirrors the SignalR push payload
+        // but as plain JSON so the frontend can parse it without a binary codec.
+        if (owner?.UserId is not null)
+        {
+            await PublishSseUserEventAsync(owner.UserId, msg.Status, push);
+        }
 
         // Step 3: Write terminal result to ResultStore (5-min TTL for GET /result fallback)
         await _resultStore.SetAsync(new ResultStoreRecord
@@ -129,4 +142,51 @@ public sealed class ResponseRouter
             ElapsedMs   = msg.ElapsedMs,
             TenantId    = msg.TenantId,
         };
+
+    /// <summary>
+    /// Publishes a JSON event to the Redis SSE user-event channel so any
+    /// <c>GET /sse/events</c> connection open for this userId receives it as a
+    /// named SSE event (RequestCompleted | RequestFailed | RequestCancelled).
+    /// </summary>
+    private async Task PublishSseUserEventAsync(
+        string userId,
+        ResponseStatus status,
+        ResponseDispatchPushMessage push)
+    {
+        var eventType = status switch
+        {
+            ResponseStatus.Done      => "RequestCompleted",
+            ResponseStatus.Cancelled => "RequestCancelled",
+            _                        => "RequestFailed",
+        };
+
+        object? errorObj = push.Error is null
+            ? null
+            : new { code = push.Error.Code, message = push.Error.Message };
+
+        var payload = JsonSerializer.Serialize(new
+        {
+            eventType,
+            requestId   = push.RequestId,
+            status      = push.Status,
+            operation   = push.Operation,
+            payloadJson = push.PayloadJson,
+            error       = errorObj,
+            elapsedMs   = push.ElapsedMs,
+            tenantId    = push.TenantId,
+        }, _jsonOpts);
+
+        try
+        {
+            await _redis.PublishAsync(
+                RedisChannel.Literal(RedisKeys.SseUserEvent(userId)),
+                payload);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "Failed to publish SSE user event for userId={UserId} requestId={RequestId}",
+                userId, push.RequestId);
+        }
+    }
 }

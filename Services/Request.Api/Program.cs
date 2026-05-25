@@ -92,8 +92,10 @@ builder.Services.AddPlatformOperations();
 
 // ── Request-Api-specific services ─────────────────────────────────────────
 builder.Services.AddSingleton<SseConnectionRegistry>();
+builder.Services.AddSingleton<UserSseRegistry>();
 builder.Services.AddSingleton<OrphanDetector>();
 builder.Services.AddHostedService<ProgressPubSubSubscriber>();
+builder.Services.AddHostedService<UserEventPubSubSubscriber>();
 builder.Services.AddHostedService<WidgetCacheInvalidationSubscriber>();
 
 // ── JWT authentication (user JWTs from external IdP) ─────────────────────
@@ -213,6 +215,22 @@ app.MapGet("/sse/requests/{requestId}/progress",
         await SseProgressEndpoint.HandleAsync(
             requestId, ctx, registry, ringBuffer,
             loggers.CreateLogger<SseProgressEndpoint.SseProgressEndpointMarker>(),
+            ct);
+    });
+
+// Global event stream: delivers RequestCompleted / RequestFailed / RequestCancelled / WidgetStale
+// as JSON SSE events. Replaces the SignalR / MessagePack WebSocket for browser clients.
+// Widget channels are passed as repeatable ?widgetChannel= query params.
+app.MapGet("/sse/events",
+    [Authorize] async (
+        HttpContext ctx,
+        UserSseRegistry registry,
+        ILoggerFactory loggers,
+        CancellationToken ct) =>
+    {
+        await EventStreamEndpoint.HandleAsync(
+            ctx, registry,
+            loggers.CreateLogger<EventStreamEndpoint.EventStreamEndpointMarker>(),
             ct);
     });
 
