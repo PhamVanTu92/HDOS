@@ -65,7 +65,10 @@
       "Bash(git commit *)",
       "Bash(git rm *)",
       "Bash(sudo docker compose logs gateway --tail=30)",
-      "Bash(xargs grep -l \"class OperationRegistration\\\\|record OperationRegistration\")"
+      "Bash(xargs grep -l \"class OperationRegistration\\\\|record OperationRegistration\")",
+      "Bash(Get-ChildItem -Path \"E:\\\\Project\\\\HDOS\" -Force)",
+      "Bash(Select-Object Name, Mode)",
+      "Bash(Format-Table -AutoSize)"
     ]
   }
 }
