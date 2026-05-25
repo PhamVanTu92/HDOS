@@ -77,8 +77,10 @@ export function useReport<T = unknown>(opts: UseReportOptions = {}) {
     queryKey: ['report-result', requestId],
     queryFn: () => getRequestResult<T>(requestId!),
     enabled: !!requestId && !pushed,
+    retry: false,
     refetchInterval: (query) => {
       if (pushed) return false;
+      if (query.state.error) return false;
       const status = query.state.data?.status;
       if (!status) return 3000;
       return ['Completed', 'Failed', 'Cancelled'].includes(status) ? false : 3000;

@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
-import { apiGet, apiPost } from './client';
+import { apiGet, apiPost, ApiError } from './client';
 import type {
   RequestEnvelope,
   RequestResult,
@@ -81,9 +81,18 @@ interface RawResultResponse {
 export async function getRequestResult<T = unknown>(
   requestId: string,
 ): Promise<RequestResult<T>> {
-  const raw = await apiGet<RawResultResponse>(
-    `/api/v1/requests/${requestId}/result`,
-  );
+  let raw: RawResultResponse;
+  try {
+    raw = await apiGet<RawResultResponse>(`/api/v1/requests/${requestId}/result`);
+  } catch (err) {
+    // 404 = result expired from Redis / DB after session timeout — normal.
+    // Return Cancelled (terminal) so every polling refetchInterval stops
+    // cleanly without surfacing an error banner to the user.
+    if (err instanceof ApiError && err.status === 404) {
+      return { requestId, status: 'Cancelled', operation: '' };
+    }
+    throw err; // re-throw 5xx / network errors
+  }
 
   // Still processing.
   if (raw.status !== 'completed' || !raw.result) {

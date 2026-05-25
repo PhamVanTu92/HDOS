@@ -309,8 +309,10 @@ export function ReportDesigner() {
     queryKey: ['report-designer-result', requestId],
     queryFn:  () => getRequestResult<unknown>(requestId!),
     enabled:  !!requestId && !pushed,
+    retry: false,
     refetchInterval: (query) => {
       if (pushed) return false;
+      if (query.state.error) return false;
       const s = query.state.data?.status;
       if (!s) return 3000;
       return ['Completed', 'Failed', 'Cancelled'].includes(s) ? false : 3000;
