@@ -53,6 +53,23 @@ public sealed class UserSseRegistry
             w.TryWrite(evt);
     }
 
+    /// <summary>
+    /// Fan out an event to ALL active SSE connections on this node, de-duplicating so each
+    /// channel writer receives the event exactly once even if it is registered under multiple keys.
+    /// Used for global broadcasts (e.g. WidgetStale that should reach every viewer).
+    /// </summary>
+    public void BroadcastAll(SseEvent evt)
+    {
+        var seen = new HashSet<ChannelWriter<SseEvent>>();
+        foreach (var pair in _connections)
+        {
+            List<ChannelWriter<SseEvent>> snapshot;
+            lock (pair.Value) { snapshot = [..pair.Value]; }
+            foreach (var w in snapshot)
+                if (seen.Add(w)) w.TryWrite(evt);
+        }
+    }
+
     /// <summary>Total active SSE /events connections across all keys on this node.</summary>
     public int TotalConnections =>
         _connections.Values.Sum(list => { lock (list) { return list.Count; } });

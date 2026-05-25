@@ -60,7 +60,7 @@ public sealed class UserEventPubSubSubscriber : BackgroundService
                 _registry.FanOut(userId, new SseEvent(eventType, value!));
             });
 
-        // ── Widget-stale notifications ─────────────────────────────────────────────────────
+        // ── Widget-stale notifications (targeted — requires client to subscribe widgetChannel) ──
         await sub.SubscribeAsync(
             RedisChannel.Pattern("rp:sse-widget-event:*"),
             (channel, value) =>
@@ -69,6 +69,28 @@ public sealed class UserEventPubSubSubscriber : BackgroundService
                 if (widgetChannel is null || value.IsNullOrEmpty) return;
 
                 _registry.FanOut(widgetChannel, new SseEvent("WidgetStale", value!));
+            });
+
+        // ── Global broadcast (sent to ALL connected clients on this node) ─────────────────────
+        // Published to rp:sse-global-event with JSON: { eventType, ...payload }
+        // Used by NotifyStale endpoint so screens in SSE mode refresh without requiring
+        // the client to reconnect with a ?widgetChannel param.
+        await sub.SubscribeAsync(
+            RedisChannel.Literal("rp:sse-global-event"),
+            (_, value) =>
+            {
+                if (value.IsNullOrEmpty) return;
+
+                var eventType = "WidgetStale";
+                try
+                {
+                    using var doc = JsonDocument.Parse(value.ToString());
+                    if (doc.RootElement.TryGetProperty("eventType", out var et))
+                        eventType = et.GetString() ?? eventType;
+                }
+                catch { /* malformed JSON — keep default */ }
+
+                _registry.BroadcastAll(new SseEvent(eventType, value!));
             });
 
         _logger.LogInformation("SSE user-event pub/sub subscriber active");

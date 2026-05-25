@@ -250,21 +250,24 @@ public sealed class ReportMenusController : ControllerBase
     }
 
     // POST api/v1/reports/screens/{screenId}/stale
-    // Publish a WidgetStale SSE event so all browsers viewing this screen in SSE mode refresh.
-    // Can be called by any authenticated system (e.g. Excel Provider after data update).
+    // Publish a WidgetStale SSE event so all browsers in SSE mode refresh this screen.
+    // Published to rp:sse-global-event → BroadcastAll → no widgetChannel subscription needed
+    // on the client. Safe to call from Excel Provider or any authenticated system.
     [HttpPost("screens/{screenId:guid}/stale")]
     public async Task<IActionResult> NotifyStaleAsync(Guid screenId, CancellationToken ct)
     {
         var channel = $"screen:{screenId}";
         var payload = JsonSerializer.Serialize(new
         {
+            eventType = "WidgetStale",
             channel,
             reason    = "data.updated",
             updatedAt = DateTime.UtcNow.ToString("O"),
         });
 
+        // Broadcast to ALL connected SSE clients — they filter by channel on the frontend.
         await _redis.GetDatabase().PublishAsync(
-            RedisChannel.Literal($"rp:sse-widget-event:{channel}"),
+            RedisChannel.Literal("rp:sse-global-event"),
             payload);
 
         return NoContent();

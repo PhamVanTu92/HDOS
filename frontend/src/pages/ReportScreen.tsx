@@ -539,6 +539,7 @@ export function ReportScreen() {
 
   // Incremented to trigger a fresh data-fetch in all WidgetCards
   const [refreshKey, setRefreshKey] = useState(0);
+  const [sseConnected, setSseConnected] = useState(sseClient.isConnected);
 
   const selectedScreenId = searchParams.get('screenId') ?? '';
 
@@ -572,6 +573,14 @@ export function ReportScreen() {
       .finally(() => setScreenLoading(false));
   }, [menuSlug, selectedScreenId]);
 
+  // ── Track SSE connection state (poll every 3s for indicator) ────────────
+  useEffect(() => {
+    if (!screen || screen.refreshMode !== 'sse') return;
+    const id = setInterval(() => setSseConnected(sseClient.isConnected), 3000);
+    setSseConnected(sseClient.isConnected);
+    return () => clearInterval(id);
+  }, [screen?.refreshMode]);
+
   // ── Timer-based auto-refresh ─────────────────────────────────────────────
   useEffect(() => {
     if (!screen || screen.refreshMode !== 'timer') return;
@@ -581,17 +590,16 @@ export function ReportScreen() {
   }, [screen?.refreshMode, screen?.refreshIntervalS, screen?.screenId]);
 
   // ── SSE-triggered refresh ────────────────────────────────────────────────
+  // KHÔNG dùng subscribeWidget (tránh reconnect SSE mỗi khi màn hình đổi).
+  // Backend publish tới rp:sse-global-event → BroadcastAll → tất cả client nhận.
+  // Frontend chỉ lọc theo evt.channel === 'screen:{screenId}'.
   useEffect(() => {
     if (!screen || screen.refreshMode !== 'sse') return;
     const channel = `screen:${screen.screenId}`;
-    sseClient.subscribeWidget(channel);
     const unsub = sseClient.on('WidgetStale', (evt) => {
       if (evt.channel === channel) setRefreshKey(k => k + 1);
     });
-    return () => {
-      unsub();
-      sseClient.unsubscribeWidget(channel);
-    };
+    return () => unsub();
   }, [screen?.refreshMode, screen?.screenId]);
 
   function selectScreen(id: string) { setSearchParams({ screenId: id }); }
@@ -683,18 +691,22 @@ export function ReportScreen() {
                 </span>
               )}
               {screen.refreshMode === 'sse' && (
-                <span className="ml-1 flex items-center gap-1.5 rounded-full bg-green-50 px-2.5 py-1 text-[10px] font-medium text-green-600 border border-green-100">
-                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />
-                  Live
-                  {/* Manual trigger — hữu ích khi test hoặc gọi thủ công */}
+                <span className={`ml-1 flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-medium border transition-colors ${
+                  sseConnected
+                    ? 'bg-green-50 text-green-600 border-green-100'
+                    : 'bg-amber-50 text-amber-600 border-amber-100'
+                }`}>
+                  <span className={`inline-block h-1.5 w-1.5 rounded-full ${sseConnected ? 'bg-green-500 animate-pulse' : 'bg-amber-400'}`} />
+                  {sseConnected ? 'Live' : 'Đang kết nối…'}
+                  {/* Manual trigger — test SSE / external systems có thể gọi endpoint này */}
                   <button
                     type="button"
-                    title="Gửi WidgetStale để test SSE refresh"
+                    title={`POST /api/v1/reports/screens/${screen.screenId}/stale`}
                     onClick={() => {
                       void apiPost(`/api/v1/reports/screens/${screen.screenId}/stale`, {})
                         .catch(() => { /* silent */ });
                     }}
-                    className="ml-0.5 rounded px-1 hover:bg-green-100 transition-colors text-green-500"
+                    className="ml-0.5 rounded px-1 hover:bg-black/5 transition-colors"
                   >
                     ⟳
                   </button>
