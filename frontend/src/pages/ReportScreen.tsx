@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { apiGet, getUserClaims } from '../api/client';
+import { apiGet, apiPost, getUserClaims } from '../api/client';
 import { submitRequest, pollResult } from '../api/requests';
 import { sseClient } from '../api/sse';
 import type { MenuDetail, ScreenDetail, WidgetDef, WidgetConfig } from '../types/menuTypes';
@@ -95,9 +95,7 @@ function isLineData(d: unknown): d is LineData {
 }
 
 function fmtAxisVal(v: number): string {
-  if (v >= 1_000_000) return (v / 1_000_000).toFixed(1) + 'M';
-  if (v >= 1_000)     return (v / 1_000).toFixed(0) + 'K';
-  return v.toFixed(0);
+  return v.toLocaleString('vi-VN');
 }
 
 function renderLine(data: unknown, color: string, cfg: WidgetConfig): React.ReactNode {
@@ -210,8 +208,8 @@ function renderBar(data: unknown, color: string, cfg: WidgetConfig): React.React
           <div className="flex-1 bg-gray-100 rounded-full h-2.5 overflow-hidden">
             <div className="h-full rounded-full transition-all" style={{ width: `${(v/mx)*100}%`, background: color }} />
           </div>
-          <span className="w-12 text-right text-gray-600 font-medium tabular-nums">
-            {typeof v === 'number' && v >= 1000 ? (v/1000).toFixed(1)+'K' : String(v)}
+          <span className="w-16 text-right text-gray-600 font-medium tabular-nums">
+            {typeof v === 'number' ? v.toLocaleString('vi-VN') : String(v)}
           </span>
         </div>
       ))}
@@ -378,9 +376,7 @@ function renderKpi(data: unknown, color: string, cfg: WidgetConfig): React.React
 
   const numVal = typeof value === 'number' ? value : null;
   const display = numVal !== null
-    ? (numVal >= 1_000_000 ? (numVal/1_000_000).toFixed(2)+' tr'
-      : numVal >= 1_000 ? (numVal/1_000).toFixed(1)+' K'
-      : numVal.toLocaleString())
+    ? numVal.toLocaleString('vi-VN')
     : String(value);
 
   const trendNum  = typeof trend === 'number' ? trend : null;
@@ -687,9 +683,21 @@ export function ReportScreen() {
                 </span>
               )}
               {screen.refreshMode === 'sse' && (
-                <span className="ml-1 flex items-center gap-1 rounded-full bg-green-50 px-2.5 py-1 text-[10px] font-medium text-green-600 border border-green-100">
+                <span className="ml-1 flex items-center gap-1.5 rounded-full bg-green-50 px-2.5 py-1 text-[10px] font-medium text-green-600 border border-green-100">
                   <span className="inline-block h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />
                   Live
+                  {/* Manual trigger — hữu ích khi test hoặc gọi thủ công */}
+                  <button
+                    type="button"
+                    title="Gửi WidgetStale để test SSE refresh"
+                    onClick={() => {
+                      void apiPost(`/api/v1/reports/screens/${screen.screenId}/stale`, {})
+                        .catch(() => { /* silent */ });
+                    }}
+                    className="ml-0.5 rounded px-1 hover:bg-green-100 transition-colors text-green-500"
+                  >
+                    ⟳
+                  </button>
                 </span>
               )}
               {refreshKey > 0 && (

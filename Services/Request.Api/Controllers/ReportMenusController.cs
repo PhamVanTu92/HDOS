@@ -1,4 +1,6 @@
+using System.Text.Json;
 using Npgsql;
+using StackExchange.Redis;
 
 namespace ReportingPlatform.RequestApi.Controllers;
 
@@ -7,9 +9,14 @@ namespace ReportingPlatform.RequestApi.Controllers;
 [Authorize]
 public sealed class ReportMenusController : ControllerBase
 {
-    private readonly NpgsqlDataSource _db;
+    private readonly NpgsqlDataSource      _db;
+    private readonly IConnectionMultiplexer _redis;
 
-    public ReportMenusController(NpgsqlDataSource db) => _db = db;
+    public ReportMenusController(NpgsqlDataSource db, IConnectionMultiplexer redis)
+    {
+        _db    = db;
+        _redis = redis;
+    }
 
     // GET api/v1/reports/menus
     [HttpGet("menus")]
@@ -240,5 +247,26 @@ public sealed class ReportMenusController : ControllerBase
             refreshIntervalS,
             widgets
         });
+    }
+
+    // POST api/v1/reports/screens/{screenId}/stale
+    // Publish a WidgetStale SSE event so all browsers viewing this screen in SSE mode refresh.
+    // Can be called by any authenticated system (e.g. Excel Provider after data update).
+    [HttpPost("screens/{screenId:guid}/stale")]
+    public async Task<IActionResult> NotifyStaleAsync(Guid screenId, CancellationToken ct)
+    {
+        var channel = $"screen:{screenId}";
+        var payload = JsonSerializer.Serialize(new
+        {
+            channel,
+            reason    = "data.updated",
+            updatedAt = DateTime.UtcNow.ToString("O"),
+        });
+
+        await _redis.GetDatabase().PublishAsync(
+            RedisChannel.Literal($"rp:sse-widget-event:{channel}"),
+            payload);
+
+        return NoContent();
     }
 }
