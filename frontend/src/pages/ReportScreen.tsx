@@ -593,13 +593,15 @@ export function ReportScreen() {
 
   // ── SSE-triggered refresh ────────────────────────────────────────────────
   // KHÔNG dùng subscribeWidget (tránh reconnect SSE mỗi khi màn hình đổi).
-  // Backend publish tới rp:sse-global-event → BroadcastAll → tất cả client nhận.
-  // Frontend chỉ lọc theo evt.channel === 'screen:{screenId}'.
+  // Hai nguồn kích hoạt:
+  //   1. SseScreenRefreshWorker → publish channel="screen:{screenId}" (timer scheduled)
+  //   2. EventProcessorService  → publish channel="screen:all" sau mỗi lần Excel Provider
+  //      push thay đổi (cùng pipeline với Dashboard WidgetStale).
   useEffect(() => {
     if (!screen || screen.refreshMode !== 'sse') return;
     const channel = `screen:${screen.screenId}`;
     const unsub = sseClient.on('WidgetStale', (evt) => {
-      if (evt.channel === channel) setRefreshKey(k => k + 1);
+      if (evt.channel === channel || evt.channel === 'screen:all') setRefreshKey(k => k + 1);
     });
     return () => unsub();
   }, [screen?.refreshMode, screen?.screenId]);

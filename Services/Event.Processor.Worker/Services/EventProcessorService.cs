@@ -101,6 +101,29 @@ internal sealed class EventProcessorService
                     "Failed to publish SSE widget event for group {Group}", group);
             }
         }
+
+        // Global SSE broadcast: notify all SSE-mode report screens that underlying data
+        // has changed. Report screens listen for channel="screen:all" and refresh their
+        // widgets immediately — the same real-time push that Dashboard widgets receive.
+        // This fires once per event (not once per subscriber) to avoid fan-out amplification.
+        try
+        {
+            var globalPayload = JsonSerializer.Serialize(new
+            {
+                eventType = "WidgetStale",
+                channel   = "screen:all",
+                reason    = "data.updated",
+                updatedAt = hint.UpdatedAt,
+            }, _jsonOpts);
+
+            await _redis.GetSubscriber().PublishAsync(
+                RedisChannel.Literal("rp:sse-global-event"),
+                globalPayload);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to publish global SSE screen-refresh event");
+        }
     }
 
     private static string WidgetGroup(string dashboardCode, string widgetId)
