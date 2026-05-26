@@ -71,6 +71,7 @@ builder.Services.AddSigningKeyService();
 builder.Services.AddSingleton<ProviderLockoutService>(sp =>
     new ProviderLockoutService(sp.GetRequiredService<IDatabase>()));
 builder.Services.AddHostedService<PendingHashCleanupService>();
+builder.Services.AddScoped<ProviderSecretService>();
 
 // ── MassTransit (publish only) ────────────────────────────────────────────
 builder.Services.AddMassTransit(x =>

@@ -15,10 +15,11 @@ namespace ReportingPlatform.RequestApi.Controllers;
 [Authorize(Roles = "admin")]
 public sealed class AdminProvidersController : ControllerBase
 {
-    private readonly IProviderRegistry _registry;
-    private readonly JwtIssuerService  _issuer;
-    private readonly NpgsqlDataSource  _db;
-    private readonly IConfiguration    _config;
+    private readonly IProviderRegistry    _registry;
+    private readonly JwtIssuerService     _issuer;
+    private readonly NpgsqlDataSource     _db;
+    private readonly IConfiguration       _config;
+    private readonly ProviderSecretService _secretSvc;
     private readonly ILogger<AdminProvidersController> _logger;
 
     public AdminProvidersController(
@@ -26,13 +27,15 @@ public sealed class AdminProvidersController : ControllerBase
         JwtIssuerService issuer,
         NpgsqlDataSource db,
         IConfiguration config,
+        ProviderSecretService secretSvc,
         ILogger<AdminProvidersController> logger)
     {
-        _registry = registry;
-        _issuer   = issuer;
-        _db       = db;
-        _config   = config;
-        _logger   = logger;
+        _registry  = registry;
+        _issuer    = issuer;
+        _db        = db;
+        _config    = config;
+        _secretSvc = secretSvc;
+        _logger    = logger;
     }
 
     // ── GET /api/v1/admin/providers ──────────────────────────────────────────
@@ -247,7 +250,133 @@ public sealed class AdminProvidersController : ControllerBase
 
         await _registry.ReloadAsync(ct);
 
+        // Also store encrypted plaintext so admin can retrieve / bootstrap later
+        await StoreEncryptedSecretAsync(id, newSecret, conn, ct);
+
         return Ok(new { providerId = id, rotatedAt = DateTimeOffset.UtcNow.ToString("O"), newSecret });
+    }
+
+    // ── POST /api/v1/admin/providers/{id}/credentials/set ───────────────────
+    /// <summary>Set a specific plaintext secret (admin-provided). Hash + encrypt + store.</summary>
+
+    [HttpPost("{id}/credentials/set")]
+    public async Task<IActionResult> SetSecretAsync(
+        string id,
+        [FromBody] SetSecretRequest req,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(req.NewSecret))
+            return BadRequest(new { error = "newSecret is required." });
+
+        var provider = await _registry.GetAsync(id, ct);
+        if (provider is null) return NotFound(new { error = $"Provider '{id}' not found." });
+
+        var newHash = BCrypt.Net.BCrypt.HashPassword(req.NewSecret.Trim(), workFactor: 12);
+        var newEnc  = _secretSvc.Encrypt(req.NewSecret.Trim());
+
+        await using var conn = await _db.OpenConnectionAsync(ct);
+        await using var tx   = await conn.BeginTransactionAsync(ct);
+        try
+        {
+            await using var update = conn.CreateCommand();
+            update.Transaction = tx;
+            update.CommandText = """
+                UPDATE provider_registry SET
+                    client_secret_hash = $1,
+                    client_secret_enc  = $2,
+                    updated_at         = NOW()
+                WHERE provider_id = $3
+                """;
+            update.Parameters.AddWithValue(newHash);
+            update.Parameters.AddWithValue(newEnc);
+            update.Parameters.AddWithValue(id);
+            await update.ExecuteNonQueryAsync(ct);
+
+            await using var audit = conn.CreateCommand();
+            audit.Transaction = tx;
+            audit.CommandText = """
+                INSERT INTO provider_credentials_audit (provider_id, action, performed_by)
+                VALUES ($1, 'set_secret', $2)
+                """;
+            audit.Parameters.AddWithValue(id);
+            audit.Parameters.AddWithValue(AdminUserId());
+            await audit.ExecuteNonQueryAsync(ct);
+
+            await tx.CommitAsync(ct);
+        }
+        catch { await tx.RollbackAsync(ct); throw; }
+
+        await _registry.ReloadAsync(ct);
+
+        _logger.LogInformation("Secret set for provider {ProviderId} by admin {AdminId}", id, AdminUserId());
+        return Ok(new { providerId = id, updatedAt = DateTimeOffset.UtcNow.ToString("O") });
+    }
+
+    // ── GET /api/v1/admin/providers/{id}/credentials/reveal ─────────────────
+    /// <summary>Reveal the stored encrypted secret (admin only). Returns plaintext once.</summary>
+
+    [HttpGet("{id}/credentials/reveal")]
+    public async Task<IActionResult> RevealAsync(string id, CancellationToken ct)
+    {
+        await using var conn = await _db.OpenConnectionAsync(ct);
+        await using var cmd  = conn.CreateCommand();
+        cmd.CommandText = "SELECT client_secret_enc FROM provider_registry WHERE provider_id = $1";
+        cmd.Parameters.AddWithValue(id);
+
+        var enc = await cmd.ExecuteScalarAsync(ct) as string;
+        if (enc is null)
+            return NotFound(new { error = "No stored secret for this provider. Use 'Set Secret' first." });
+
+        try
+        {
+            var plaintext = _secretSvc.Decrypt(enc);
+            _logger.LogWarning("Secret revealed for provider {ProviderId} by admin {AdminId}", id, AdminUserId());
+            return Ok(new { clientSecret = plaintext });
+        }
+        catch
+        {
+            return UnprocessableEntity(new { error = "Secret could not be decrypted — key may have changed. Re-set the secret." });
+        }
+    }
+
+    // ── POST /api/v1/admin/providers/{id}/bootstrap-token/regenerate ────────
+    /// <summary>Regenerate bootstrap token. Provider uses this to fetch its secret on startup.</summary>
+
+    [HttpPost("{id}/bootstrap-token/regenerate")]
+    public async Task<IActionResult> RegenerateBootstrapTokenAsync(string id, CancellationToken ct)
+    {
+        var provider = await _registry.GetAsync(id, ct);
+        if (provider is null) return NotFound(new { error = $"Provider '{id}' not found." });
+
+        var token = ProviderSecretService.GenerateBootstrapToken();
+
+        await using var conn = await _db.OpenConnectionAsync(ct);
+        await using var cmd  = conn.CreateCommand();
+        cmd.CommandText = """
+            UPDATE provider_registry
+            SET bootstrap_token = $1, updated_at = NOW()
+            WHERE provider_id = $2
+            """;
+        cmd.Parameters.AddWithValue(token);
+        cmd.Parameters.AddWithValue(id);
+        await cmd.ExecuteNonQueryAsync(ct);
+
+        _logger.LogInformation("Bootstrap token regenerated for provider {ProviderId}", id);
+        return Ok(new { providerId = id, bootstrapToken = token });
+    }
+
+    // ── GET /api/v1/admin/providers/{id}/bootstrap-token ────────────────────
+
+    [HttpGet("{id}/bootstrap-token")]
+    public async Task<IActionResult> GetBootstrapTokenAsync(string id, CancellationToken ct)
+    {
+        await using var conn = await _db.OpenConnectionAsync(ct);
+        await using var cmd  = conn.CreateCommand();
+        cmd.CommandText = "SELECT bootstrap_token FROM provider_registry WHERE provider_id = $1";
+        cmd.Parameters.AddWithValue(id);
+
+        var token = await cmd.ExecuteScalarAsync(ct) as string;
+        return Ok(new { providerId = id, bootstrapToken = token });
     }
 
     // ── POST /api/v1/admin/providers/{id}/credentials/revoke ─────────────────
@@ -450,6 +579,29 @@ public sealed class AdminProvidersController : ControllerBase
 
     private string AdminUserId() =>
         User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "unknown-admin";
+
+    /// <summary>Encrypt and store plaintext secret in client_secret_enc column.</summary>
+    private async Task StoreEncryptedSecretAsync(
+        string providerId, string plaintext, Npgsql.NpgsqlConnection conn, CancellationToken ct)
+    {
+        try
+        {
+            var enc = _secretSvc.Encrypt(plaintext);
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText = """
+                UPDATE provider_registry
+                SET client_secret_enc = $1
+                WHERE provider_id = $2
+                """;
+            cmd.Parameters.AddWithValue(enc);
+            cmd.Parameters.AddWithValue(providerId);
+            await cmd.ExecuteNonQueryAsync(ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to store encrypted secret for provider {ProviderId}", providerId);
+        }
+    }
 }
 
 // ── Request DTOs ─────────────────────────────────────────────────────────────
@@ -462,6 +614,11 @@ public sealed record UpdateProviderRequest
     public int?      TimeoutMs   { get; init; }
     public int?      Priority    { get; init; }
     public string?   Status      { get; init; }
+}
+
+public sealed record SetSecretRequest
+{
+    public required string NewSecret { get; init; }
 }
 
 public sealed record RegisterProviderRequest

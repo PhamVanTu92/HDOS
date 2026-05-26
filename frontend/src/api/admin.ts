@@ -150,3 +150,34 @@ export function updateOperation(
 export function deleteOperation(pattern: string): Promise<void> {
   return apiDelete(`/api/v1/admin/operations/${encodeURIComponent(pattern)}`);
 }
+
+// ── Provider Credentials ──────────────────────────────────────────────────────
+
+/** Set a specific known plaintext secret (hashes + encrypts in backend). */
+export function setProviderSecret(
+  providerId: string,
+  newSecret: string,
+): Promise<{ providerId: string; updatedAt: string }> {
+  return apiPost(`/api/v1/admin/providers/${providerId}/credentials/set`, { newSecret });
+}
+
+/** Reveal the currently stored plaintext secret (admin only, returns once). */
+export function revealProviderSecret(
+  providerId: string,
+): Promise<{ clientSecret: string }> {
+  return apiGet(`/api/v1/admin/providers/${providerId}/credentials/reveal`);
+}
+
+/** Get current bootstrap token for a provider. */
+export function getBootstrapToken(
+  providerId: string,
+): Promise<{ providerId: string; bootstrapToken: string | null }> {
+  return apiGet(`/api/v1/admin/providers/${providerId}/bootstrap-token`);
+}
+
+/** Regenerate bootstrap token — returns new token. Provider must be updated. */
+export function regenerateBootstrapToken(
+  providerId: string,
+): Promise<{ providerId: string; bootstrapToken: string }> {
+  return apiPost(`/api/v1/admin/providers/${providerId}/bootstrap-token/regenerate`, {});
+}
