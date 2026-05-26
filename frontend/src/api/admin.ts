@@ -1,4 +1,4 @@
-import { apiGet, apiPost, apiPut } from './client';
+import { apiGet, apiPost, apiPut, apiDelete } from './client';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -45,6 +45,15 @@ export interface RegisterResult {
   registeredAt:  string;
 }
 
+export interface UpdateProviderRequest {
+  displayName?: string;
+  description?: string;
+  operations?:  string[];
+  timeoutMs?:   number;
+  priority?:    number;
+  status?:      string;
+}
+
 // ── API calls ─────────────────────────────────────────────────────────────────
 
 export function listProviders(): Promise<ProviderInfo[]> {
@@ -53,6 +62,10 @@ export function listProviders(): Promise<ProviderInfo[]> {
 
 export function registerProvider(req: RegisterRequest): Promise<RegisterResult> {
   return apiPost<RegisterRequest, RegisterResult>('/api/v1/admin/providers', req);
+}
+
+export function updateProvider(providerId: string, req: UpdateProviderRequest): Promise<ProviderInfo> {
+  return apiPut<UpdateProviderRequest, ProviderInfo>(`/api/v1/admin/providers/${providerId}`, req);
 }
 
 export function probeProvider(providerId: string): Promise<ProbeResult> {
@@ -76,51 +89,43 @@ export function revokeCredentials(providerId: string): Promise<void> {
   );
 }
 
-/** Update the operations array on an existing provider. */
-export function updateProviderOperations(
-  providerId: string,
-  operations: string[],
-): Promise<ProviderInfo> {
-  return apiPut<{ operations: string[] }, ProviderInfo>(
-    `/api/v1/admin/providers/${providerId}/operations`,
-    { operations },
-  );
-}
-
 // ── Operation Registry ────────────────────────────────────────────────────────
 
 export interface OperationEntry {
+  id:               number;
   operationPattern: string;
   handlerType:      string;
   providerId:       string | null;
-  paramsSchema:     unknown | null;
+  paramsSchema:     string | null;   // raw JSON text
   timeoutMs:        number;
   cacheable:        boolean;
-  cacheTtlSeconds:  number;
+  cacheTtlSeconds:  number | null;
   idempotent:       boolean;
-  status:           'active' | 'disabled';
+  status:           'active' | 'deprecated' | 'disabled';
+  createdAt:        string;
+  updatedAt:        string;
 }
 
 export interface AddOperationRequest {
   operationPattern: string;
-  handlerType?:     string;
-  providerId?:      string;
-  paramsSchema?:    unknown;
-  timeoutMs?:       number;
-  cacheable?:       boolean;
-  cacheTtlSeconds?: number;
-  idempotent?:      boolean;
+  handlerType:      string;
+  providerId:       string | null;
+  paramsSchemaJson: string | null;  // raw JSON string
+  timeoutMs:        number;
+  cacheable:        boolean;
+  cacheTtlSeconds:  number | null;
+  idempotent:       boolean;
 }
 
 export interface UpdateOperationRequest {
-  handlerType?:     string;
-  providerId?:      string;
-  paramsSchema?:    unknown;
-  timeoutMs?:       number;
-  cacheable?:       boolean;
-  cacheTtlSeconds?: number;
-  idempotent?:      boolean;
-  status?:          'active' | 'disabled';
+  handlerType:      string;
+  providerId:       string | null;
+  paramsSchemaJson: string | null;
+  timeoutMs:        number;
+  cacheable:        boolean;
+  cacheTtlSeconds:  number | null;
+  idempotent:       boolean;
+  status:           string;
 }
 
 export function listOperations(): Promise<OperationEntry[]> {
@@ -139,4 +144,8 @@ export function updateOperation(
     `/api/v1/admin/operations/${encodeURIComponent(pattern)}`,
     req,
   );
+}
+
+export function deleteOperation(pattern: string): Promise<void> {
+  return apiDelete(`/api/v1/admin/operations/${encodeURIComponent(pattern)}`);
 }

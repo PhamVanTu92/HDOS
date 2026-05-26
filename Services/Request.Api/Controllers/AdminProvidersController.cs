@@ -142,6 +142,62 @@ public sealed class AdminProvidersController : ControllerBase
             new { providerId = req.ProviderId, registeredAt = DateTimeOffset.UtcNow });
     }
 
+    // ── PUT /api/v1/admin/providers/{id} ────────────────────────────────────
+
+    [HttpPut("{id}")]
+    public async Task<IActionResult> UpdateAsync(
+        string id,
+        [FromBody] UpdateProviderRequest req,
+        CancellationToken ct)
+    {
+        await using var conn = await _db.OpenConnectionAsync(ct);
+        await using var cmd  = conn.CreateCommand();
+        cmd.CommandText = """
+            UPDATE provider_registry SET
+                display_name = COALESCE($2, display_name),
+                description  = COALESCE($3, description),
+                operations   = COALESCE($4, operations),
+                timeout_ms   = COALESCE($5, timeout_ms),
+                priority     = COALESCE($6, priority),
+                status       = COALESCE($7, status),
+                updated_at   = NOW()
+            WHERE provider_id = $1
+            RETURNING provider_id, display_name, description, client_id,
+                      operations, timeout_ms, priority, status,
+                      created_at, updated_at
+            """;
+        cmd.Parameters.AddWithValue(id);
+        cmd.Parameters.AddWithValue(req.DisplayName is null ? DBNull.Value : (object)req.DisplayName.Trim());
+        cmd.Parameters.AddWithValue(req.Description is null ? DBNull.Value : (object)req.Description.Trim());
+        cmd.Parameters.AddWithValue(req.Operations is null ? DBNull.Value : (object)req.Operations);
+        cmd.Parameters.AddWithValue(req.TimeoutMs is null ? DBNull.Value : (object)req.TimeoutMs.Value);
+        cmd.Parameters.AddWithValue(req.Priority is null ? DBNull.Value : (object)(short)Math.Clamp(req.Priority.Value, 1, 10));
+        cmd.Parameters.AddWithValue(req.Status is null ? DBNull.Value : (object)req.Status.Trim());
+
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        if (!await reader.ReadAsync(ct))
+            return NotFound(new { error = $"Provider '{id}' not found." });
+
+        var result = new
+        {
+            providerId  = reader.GetString(0),
+            displayName = reader.GetString(1),
+            description = reader.IsDBNull(2) ? null : reader.GetString(2),
+            clientId    = reader.GetString(3),
+            operations  = (string[])(reader.GetValue(4) ?? Array.Empty<string>()),
+            timeoutMs   = reader.GetInt32(5),
+            priority    = reader.GetInt16(6),
+            status      = reader.GetString(7),
+            createdAt   = reader.GetDateTime(8),
+            updatedAt   = reader.GetDateTime(9),
+        };
+        await reader.CloseAsync();
+
+        await _registry.ReloadAsync(ct);
+
+        return Ok(result);
+    }
+
     // ── POST /api/v1/admin/providers/{id}/credentials/rotate ─────────────────
 
     [HttpPost("{id}/credentials/rotate")]
@@ -397,6 +453,16 @@ public sealed class AdminProvidersController : ControllerBase
 }
 
 // ── Request DTOs ─────────────────────────────────────────────────────────────
+
+public sealed record UpdateProviderRequest
+{
+    public string?   DisplayName { get; init; }
+    public string?   Description { get; init; }
+    public string[]? Operations  { get; init; }
+    public int?      TimeoutMs   { get; init; }
+    public int?      Priority    { get; init; }
+    public string?   Status      { get; init; }
+}
 
 public sealed record RegisterProviderRequest
 {
