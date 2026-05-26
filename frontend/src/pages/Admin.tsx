@@ -1198,11 +1198,297 @@ function OperationsTab() {
   );
 }
 
+// ── Credentials Tab ───────────────────────────────────────────────────────────
+
+function CredentialsTab() {
+  const [selectedId,   setSelectedId]   = useState<string | null>(null);
+  const [generatedSecret, setGeneratedSecret] = useState<string | null>(null);
+  const [copied,       setCopied]       = useState(false);
+  const [rotateError,  setRotateError]  = useState<string | null>(null);
+
+  const { data: providers, isLoading } = useQuery({
+    queryKey: ['admin-providers'],
+    queryFn:  listProviders,
+  });
+
+  const selectedProvider = providers?.find(p => p.providerId === selectedId) ?? null;
+
+  const rotateMut = useMutation({
+    mutationFn: (id: string) => rotateCredentials(id),
+    onSuccess: (r) => {
+      setGeneratedSecret(r.newSecret);
+      setRotateError(null);
+      setCopied(false);
+    },
+    onError: (e) => {
+      setRotateError(e instanceof ApiError ? e.message : 'Tao secret that bai');
+    },
+  });
+
+  function handleSelectProvider(id: string) {
+    setSelectedId(id);
+    setGeneratedSecret(null);
+    setRotateError(null);
+    setCopied(false);
+  }
+
+  function handleCopy() {
+    if (!generatedSecret) return;
+    void navigator.clipboard.writeText(generatedSecret).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    });
+  }
+
+  function handleGenerate() {
+    if (!selectedId) return;
+    setGeneratedSecret(null);
+    rotateMut.mutate(selectedId);
+  }
+
+  return (
+    <div className="grid grid-cols-3 gap-6">
+      {/* ── Left: Provider list ── */}
+      <div className="col-span-1">
+        <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
+          Chon Provider
+        </h2>
+        {isLoading && (
+          <div className="flex items-center gap-2 text-sm text-gray-400">
+            <RefreshIcon spinning /> Dang tai…
+          </div>
+        )}
+        <div className="space-y-2">
+          {providers?.map((p) => (
+            <button
+              key={p.providerId}
+              onClick={() => handleSelectProvider(p.providerId)}
+              className={`w-full rounded-xl border px-4 py-3 text-left transition-all ${
+                selectedId === p.providerId
+                  ? 'border-brand-400 bg-brand-50 ring-1 ring-brand-400'
+                  : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-medium text-sm text-gray-900 truncate">
+                  {p.displayName}
+                </span>
+                <span className={`flex-shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${statusColor(p.status)}`}>
+                  {statusLabel(p.status)}
+                </span>
+              </div>
+              <p className="mt-0.5 font-mono text-xs text-gray-400">{p.providerId}</p>
+              <p className="mt-0.5 text-xs text-gray-500">
+                Client ID: <code className="text-gray-700">{p.clientId}</code>
+              </p>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Right: Secret generator ── */}
+      <div className="col-span-2 space-y-5">
+        {!selectedProvider ? (
+          <div className="flex h-64 items-center justify-center rounded-xl border-2 border-dashed border-gray-200 text-gray-400">
+            <div className="text-center">
+              <svg className="mx-auto mb-3 h-10 w-10 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                  d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+              </svg>
+              <p className="text-sm">Chon mot provider de cap secret moi</p>
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* Provider info card */}
+            <div className="rounded-xl border border-gray-200 bg-white px-5 py-4">
+              <div className="flex items-start justify-between">
+                <div>
+                  <h3 className="font-semibold text-gray-900">{selectedProvider.displayName}</h3>
+                  <p className="text-xs text-gray-500 font-mono mt-0.5">{selectedProvider.providerId}</p>
+                  {selectedProvider.description && (
+                    <p className="text-sm text-gray-500 mt-1">{selectedProvider.description}</p>
+                  )}
+                </div>
+                <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${statusColor(selectedProvider.status)}`}>
+                  {statusLabel(selectedProvider.status)}
+                </span>
+              </div>
+              <div className="mt-3 flex gap-6 text-xs text-gray-500">
+                <span>Client ID: <code className="text-gray-700 font-mono">{selectedProvider.clientId}</code></span>
+                <span>Timeout: {selectedProvider.timeoutMs / 1000}s</span>
+                <span>{selectedProvider.operations.length} operations</span>
+              </div>
+            </div>
+
+            {/* Generate section */}
+            <div className="rounded-xl border border-gray-200 bg-white px-5 py-5 space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-semibold text-gray-900">Cap Secret moi</h3>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    He thong se tao ngau nhien mot secret manh, ma hoa va luu vao co so du lieu.
+                    Secret goc chi hien thi mot lan duy nhat.
+                  </p>
+                </div>
+                <button
+                  onClick={handleGenerate}
+                  disabled={rotateMut.isPending}
+                  className="flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60 whitespace-nowrap"
+                >
+                  {rotateMut.isPending ? (
+                    <><RefreshIcon spinning /> Dang tao…</>
+                  ) : (
+                    <>
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                          d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                      </svg>
+                      Tao Secret moi
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {rotateError && (
+                <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                  {rotateError}
+                </div>
+              )}
+
+              {/* Secret display */}
+              {generatedSecret && (
+                <div className="space-y-3">
+                  <div className="rounded-lg border-2 border-amber-300 bg-amber-50 px-4 py-3">
+                    <div className="flex items-center gap-2 mb-2">
+                      <svg className="h-4 w-4 text-amber-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                          d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                      <span className="text-xs font-semibold text-amber-800">
+                        Chi hien thi mot lan — sao chep ngay truoc khi roi trang nay
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <code className="flex-1 select-all rounded bg-white border border-amber-200 px-3 py-2 text-xs font-mono break-all text-gray-900">
+                        {generatedSecret}
+                      </code>
+                      <button
+                        onClick={handleCopy}
+                        className={`flex-shrink-0 flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors ${
+                          copied
+                            ? 'bg-green-100 text-green-700 border border-green-300'
+                            : 'bg-brand-600 text-white hover:bg-brand-700'
+                        }`}
+                      >
+                        {copied ? (
+                          <><svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg> Da copy</>
+                        ) : (
+                          <><svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg> Copy</>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Step-by-step guide */}
+            <div className="rounded-xl border border-gray-200 bg-white px-5 py-5">
+              <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                <svg className="h-4 w-4 text-brand-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                </svg>
+                Huong dan cap nhat {selectedProvider.displayName}
+              </h3>
+              <ol className="space-y-4">
+                {[
+                  {
+                    step: 1,
+                    title: 'Sao chep Secret phia tren',
+                    desc: 'Bam nut "Copy" de sao chep secret vao clipboard.',
+                  },
+                  {
+                    step: 2,
+                    title: 'Mo file cau hinh cua Provider',
+                    code: 'nano ~/excel-provider/excel-provider/appsettings.json',
+                    desc: 'Tim den muc ProviderBridge > ClientSecret (hoac BridgeOptions).',
+                  },
+                  {
+                    step: 3,
+                    title: 'Dan secret vao truong ClientSecret',
+                    desc: 'Thay the gia tri cu bang secret vua tao. Luu file.',
+                  },
+                  {
+                    step: 4,
+                    title: 'Khoi dong lai container',
+                    code: `docker compose restart ${selectedProvider.providerId}`,
+                    desc: 'Provider se tu dong ket noi lai voi secret moi.',
+                  },
+                  {
+                    step: 5,
+                    title: 'Xoa lockout Redis (neu bi khoa)',
+                    code: `docker compose exec redis redis-cli DEL rp:auth:rate:cid:${selectedProvider.clientId} rp:auth:locked:${selectedProvider.clientId} rp:auth:failures:${selectedProvider.clientId}`,
+                    desc: 'Chi can thiet neu provider da bi rate-limit truoc do.',
+                  },
+                ].map(({ step, title, desc, code }) => (
+                  <li key={step} className="flex gap-3">
+                    <div className="flex-shrink-0 flex h-6 w-6 items-center justify-center rounded-full bg-brand-100 text-xs font-bold text-brand-700">
+                      {step}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900">{title}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">{desc}</p>
+                      {code && (
+                        <CopyableCode code={code} />
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Copyable Code ─────────────────────────────────────────────────────────────
+
+function CopyableCode({ code }: { code: string }) {
+  const [copied, setCopied] = useState(false);
+  function copy() {
+    void navigator.clipboard.writeText(code).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    });
+  }
+  return (
+    <div className="mt-1.5 flex items-start gap-1.5 group">
+      <code className="flex-1 rounded border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-xs font-mono text-gray-700 break-all">
+        {code}
+      </code>
+      <button
+        onClick={copy}
+        title="Copy"
+        className="flex-shrink-0 rounded border border-gray-200 bg-gray-50 p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+      >
+        {copied
+          ? <svg className="h-3.5 w-3.5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+          : <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+        }
+      </button>
+    </div>
+  );
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export function Admin() {
   const queryClient = useQueryClient();
-  const [tab,       setTab]       = useState<'providers' | 'operations'>('providers');
+  const [tab,       setTab]       = useState<'providers' | 'operations' | 'credentials'>('providers');
   const [showModal, setShowModal] = useState(false);
 
   const { data: providers, isLoading, error, isRefetching } = useQuery({
@@ -1281,6 +1567,16 @@ export function Admin() {
           }`}
         >
           Operations
+        </button>
+        <button
+          onClick={() => setTab('credentials')}
+          className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
+            tab === 'credentials'
+              ? 'bg-white text-gray-900 shadow-sm'
+              : 'text-gray-600 hover:text-gray-900'
+          }`}
+        >
+          Credentials
         </button>
       </div>
 
@@ -1361,6 +1657,9 @@ export function Admin() {
 
       {/* ── Operations tab ── */}
       {tab === 'operations' && <OperationsTab />}
+
+      {/* ── Credentials tab ── */}
+      {tab === 'credentials' && <CredentialsTab />}
     </div>
   );
 }
