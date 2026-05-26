@@ -27,6 +27,7 @@ export interface ProbeResult {
 export interface RotateResult {
   providerId: string;
   rotatedAt:  string;
+  newSecret:  string;   // plaintext — hiển thị một lần duy nhất
 }
 
 export interface RegisterRequest {

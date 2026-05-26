@@ -247,7 +247,7 @@ public sealed class AdminProvidersController : ControllerBase
 
         await _registry.ReloadAsync(ct);
 
-        return Ok(new { providerId = id, rotatedAt = DateTimeOffset.UtcNow.ToString("O") });
+        return Ok(new { providerId = id, rotatedAt = DateTimeOffset.UtcNow.ToString("O"), newSecret });
     }
 
     // ── POST /api/v1/admin/providers/{id}/credentials/revoke ─────────────────

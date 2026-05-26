@@ -300,6 +300,7 @@ function ProviderCard({ provider }: { provider: ProviderInfo }) {
   const [confirmRevoke, setConfirmRevoke] = useState(false);
   const [showEdit,      setShowEdit]      = useState(false);
   const [feedback,      setFeedback]      = useState<string | null>(null);
+  const [newSecret,     setNewSecret]     = useState<string | null>(null);
 
   const probeMut = useMutation({
     mutationFn: () => probeProvider(provider.providerId),
@@ -310,7 +311,7 @@ function ProviderCard({ provider }: { provider: ProviderInfo }) {
   const rotateMut = useMutation({
     mutationFn: () => rotateCredentials(provider.providerId),
     onSuccess: (r) => {
-      setFeedback(`Đã xoay key lúc ${new Date(r.rotatedAt).toLocaleTimeString()}`);
+      setNewSecret(r.newSecret);
       void queryClient.invalidateQueries({ queryKey: ['admin-providers'] });
     },
     onError: (e) => setFeedback(e instanceof ApiError ? e.message : 'Xoay key thất bại'),
@@ -469,7 +470,101 @@ function ProviderCard({ provider }: { provider: ProviderInfo }) {
           onSuccess={() => void queryClient.invalidateQueries({ queryKey: ['admin-providers'] })}
         />
       )}
+
+      {newSecret && (
+        <NewSecretModal
+          providerId={provider.providerId}
+          secret={newSecret}
+          onClose={() => setNewSecret(null)}
+        />
+      )}
     </>
+  );
+}
+
+// ── New Secret Modal ──────────────────────────────────────────────────────────
+
+interface NewSecretModalProps {
+  providerId: string;
+  secret:     string;
+  onClose:    () => void;
+}
+
+function NewSecretModal({ providerId, secret, onClose }: NewSecretModalProps) {
+  const [copied, setCopied] = useState(false);
+
+  function copy() {
+    void navigator.clipboard.writeText(secret).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="w-full max-w-md rounded-2xl bg-white shadow-xl">
+        {/* Header */}
+        <div className="flex items-center gap-3 border-b border-gray-200 px-6 py-4">
+          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-100">
+            <svg className="h-5 w-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
+          </div>
+          <div>
+            <h3 className="font-semibold text-gray-900">Secret mới — sao chép ngay</h3>
+            <p className="text-xs text-gray-500 font-mono">{providerId}</p>
+          </div>
+        </div>
+
+        {/* Body */}
+        <div className="px-6 py-5 space-y-4">
+          {/* Warning */}
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            ⚠️ Secret chỉ hiển thị <strong>một lần duy nhất</strong>. Sao chép và cập nhật vào
+            cấu hình Excel Provider trước khi đóng cửa sổ này.
+          </div>
+
+          {/* Secret box */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Client Secret</label>
+            <div className="flex items-center gap-2">
+              <code className="flex-1 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs font-mono break-all text-gray-800 select-all">
+                {secret}
+              </code>
+              <button
+                onClick={copy}
+                className={`flex-shrink-0 rounded-lg px-3 py-2 text-xs font-medium transition-colors ${
+                  copied
+                    ? 'bg-green-100 text-green-700 border border-green-200'
+                    : 'bg-brand-600 text-white hover:bg-brand-700'
+                }`}
+              >
+                {copied ? '✓ Đã copy' : 'Copy'}
+              </button>
+            </div>
+          </div>
+
+          {/* Instructions */}
+          <div className="rounded-lg bg-gray-50 border border-gray-200 px-4 py-3 text-xs text-gray-600 space-y-1">
+            <p className="font-medium text-gray-700">Cập nhật Excel Provider:</p>
+            <p>1. Mở <code className="bg-gray-200 px-1 rounded">appsettings.json</code> của Excel Provider</p>
+            <p>2. Tìm <code className="bg-gray-200 px-1 rounded">ClientSecret</code> → thay bằng giá trị trên</p>
+            <p>3. Restart Excel Provider container</p>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="flex justify-end border-t border-gray-200 px-6 py-4">
+          <button
+            onClick={onClose}
+            className="rounded-lg bg-gray-800 px-5 py-2 text-sm font-medium text-white hover:bg-gray-900"
+          >
+            Đã sao chép, đóng
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
