@@ -3,13 +3,14 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   listProviders,
   listOperations,
-  updateProviderOperations,
+  updateProvider,
   addOperation,
   updateOperation,
   type ProviderInfo,
   type OperationEntry,
   type AddOperationRequest,
   type UpdateOperationRequest,
+  type UpdateProviderRequest,
 } from '../../api/admin';
 import { ApiError, hasRealmRole } from '../../api/client';
 
@@ -60,7 +61,7 @@ function ProviderOpsCard({ provider }: { provider: ProviderInfo }) {
   const [feedback, setFeedback]     = useState<string | null>(null);
 
   const saveMut = useMutation({
-    mutationFn: () => updateProviderOperations(provider.providerId, ops),
+    mutationFn: () => updateProvider(provider.providerId, { operations: ops } satisfies UpdateProviderRequest),
     onSuccess: () => {
       setEditing(false);
       setFeedback('Đã lưu danh sách operations.');
@@ -379,11 +380,12 @@ interface AddOpFormProps {
 function AddOperationForm({ onSubmit, onCancel, isPending, error }: AddOpFormProps) {
   const [form, setForm] = useState<AddOperationRequest>({
     operationPattern: '',
-    handlerType:      'grpc',
-    providerId:       '',
+    handlerType:      'provider',
+    providerId:       null,
+    paramsSchemaJson: null,
     timeoutMs:        30000,
-    cacheable:        true,
-    cacheTtlSeconds:  60,
+    cacheable:        false,
+    cacheTtlSeconds:  null,
     idempotent:       true,
   });
 
@@ -441,10 +443,11 @@ function AddOperationForm({ onSubmit, onCancel, isPending, error }: AddOpFormPro
           <label className="block text-xs font-medium text-gray-700 mb-1">Cache TTL (giây)</label>
           <input
             type="number"
-            value={form.cacheTtlSeconds}
-            onChange={(e) => set('cacheTtlSeconds', parseInt(e.target.value) || 60)}
+            value={form.cacheTtlSeconds ?? ''}
+            onChange={(e) => set('cacheTtlSeconds', parseInt(e.target.value) || null)}
             min={0} max={86400}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500 outline-none"
+            disabled={!form.cacheable}
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500 outline-none disabled:opacity-50"
           />
         </div>
         <div className="flex items-center gap-4">
@@ -504,13 +507,14 @@ interface EditRowProps {
 
 function EditOperationRow({ entry, onSave, onCancel, isPending, error }: EditRowProps) {
   const [form, setForm] = useState<UpdateOperationRequest>({
-    handlerType:     entry.handlerType,
-    providerId:      entry.providerId ?? '',
-    timeoutMs:       entry.timeoutMs,
-    cacheable:       entry.cacheable,
-    cacheTtlSeconds: entry.cacheTtlSeconds,
-    idempotent:      entry.idempotent,
-    status:          entry.status,
+    handlerType:      entry.handlerType,
+    providerId:       entry.providerId,
+    paramsSchemaJson: entry.paramsSchema ?? null,
+    timeoutMs:        entry.timeoutMs,
+    cacheable:        entry.cacheable,
+    cacheTtlSeconds:  entry.cacheTtlSeconds,
+    idempotent:       entry.idempotent,
+    status:           entry.status,
   });
 
   function set<K extends keyof UpdateOperationRequest>(k: K, v: UpdateOperationRequest[K]) {
@@ -547,8 +551,8 @@ function EditOperationRow({ entry, onSave, onCancel, isPending, error }: EditRow
       <td className="px-4 py-3">
         <input
           type="number"
-          value={form.cacheTtlSeconds}
-          onChange={(e) => set('cacheTtlSeconds', parseInt(e.target.value) || 60)}
+          value={form.cacheTtlSeconds ?? ''}
+          onChange={(e) => set('cacheTtlSeconds', parseInt(e.target.value) || null)}
           disabled={!form.cacheable}
           className="w-20 rounded border border-gray-300 px-2 py-1 text-xs focus:border-brand-500 outline-none disabled:opacity-50"
         />

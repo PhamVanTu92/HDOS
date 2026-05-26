@@ -680,17 +680,6 @@ interface AddEditOperationModalProps {
   onSuccess: () => void;
 }
 
-const BLANK_ADD: AddOperationRequest = {
-  operationPattern: '',
-  handlerType:      'provider',
-  providerId:       null,
-  paramsSchemaJson: null,
-  timeoutMs:        30000,
-  cacheable:        false,
-  cacheTtlSeconds:  null,
-  idempotent:       true,
-};
-
 function AddEditOperationModal({ entry, onClose, onSuccess }: AddEditOperationModalProps) {
   const queryClient = useQueryClient();
   const isEdit      = entry !== null;
