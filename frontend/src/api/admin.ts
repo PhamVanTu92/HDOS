@@ -98,6 +98,7 @@ export interface OperationEntry {
   handlerType:      string;
   providerId:       string | null;
   paramsSchema:     string | null;   // raw JSON text
+  resultChartType:  string | null;   // e.g. 'kpi_grid', 'line_chart'
   timeoutMs:        number;
   cacheable:        boolean;
   cacheTtlSeconds:  number | null;
@@ -108,25 +109,27 @@ export interface OperationEntry {
 }
 
 export interface AddOperationRequest {
-  operationPattern: string;
-  handlerType:      string;
-  providerId:       string | null;
-  paramsSchemaJson: string | null;  // raw JSON string
-  timeoutMs:        number;
-  cacheable:        boolean;
-  cacheTtlSeconds:  number | null;
-  idempotent:       boolean;
+  operationPattern:  string;
+  handlerType:       string;
+  providerId:        string | null;
+  paramsSchemaJson:  string | null;  // raw JSON string
+  resultChartType?:  string | null;
+  timeoutMs:         number;
+  cacheable:         boolean;
+  cacheTtlSeconds:   number | null;
+  idempotent:        boolean;
 }
 
 export interface UpdateOperationRequest {
-  handlerType:      string;
-  providerId:       string | null;
-  paramsSchemaJson: string | null;
-  timeoutMs:        number;
-  cacheable:        boolean;
-  cacheTtlSeconds:  number | null;
-  idempotent:       boolean;
-  status:           string;
+  handlerType:       string;
+  providerId:        string | null;
+  paramsSchemaJson:  string | null;
+  resultChartType?:  string | null;
+  timeoutMs:         number;
+  cacheable:         boolean;
+  cacheTtlSeconds:   number | null;
+  idempotent:        boolean;
+  status:            string;
 }
 
 export function listOperations(): Promise<OperationEntry[]> {

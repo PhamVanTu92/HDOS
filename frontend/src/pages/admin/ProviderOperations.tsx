@@ -12,6 +12,7 @@ import {
   type UpdateOperationRequest,
   type UpdateProviderRequest,
 } from '../../api/admin';
+import { listWidgetSchemas } from '../../api/adminModules';
 import { ApiError, hasRealmRole } from '../../api/client';
 
 // ── Icons ─────────────────────────────────────────────────────────────────────
@@ -228,6 +229,14 @@ function OperationRegistryTab() {
     retry:    1,
   });
 
+  // Widget schema catalog — for resultChartType select options
+  const { data: widgetSchemas } = useQuery({
+    queryKey: ['widget-schemas'],
+    queryFn:  () => listWidgetSchemas(),
+    staleTime: 5 * 60 * 1000,
+  });
+  const chartTypeOptions = widgetSchemas?.map(s => s.chartType) ?? [];
+
   const addMut = useMutation({
     mutationFn: (req: AddOperationRequest) => addOperation(req),
     onSuccess: () => {
@@ -296,6 +305,7 @@ function OperationRegistryTab() {
           onCancel={() => setShowAdd(false)}
           isPending={addMut.isPending}
           error={addMut.isError ? (addMut.error instanceof ApiError ? addMut.error.message : 'Thêm thất bại') : null}
+          chartTypeOptions={chartTypeOptions}
         />
       )}
 
@@ -306,6 +316,7 @@ function OperationRegistryTab() {
             <tr>
               <th className="px-4 py-3 text-left">Operation Pattern</th>
               <th className="px-4 py-3 text-left">Handler / Provider</th>
+              <th className="px-4 py-3 text-left">Result Type</th>
               <th className="px-4 py-3 text-left">Timeout</th>
               <th className="px-4 py-3 text-left">Cache</th>
               <th className="px-4 py-3 text-left">Status</th>
@@ -315,7 +326,7 @@ function OperationRegistryTab() {
           <tbody className="divide-y divide-gray-100">
             {ops?.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-gray-400">
+                <td colSpan={7} className="px-4 py-8 text-center text-gray-400">
                   Chưa có entries trong registry.
                 </td>
               </tr>
@@ -329,6 +340,7 @@ function OperationRegistryTab() {
                   onCancel={() => setEditingEntry(null)}
                   isPending={updateMut.isPending}
                   error={updateMut.isError ? (updateMut.error instanceof ApiError ? updateMut.error.message : 'Lưu thất bại') : null}
+                  chartTypeOptions={chartTypeOptions}
                 />
               ) : (
                 <tr key={entry.operationPattern} className="hover:bg-gray-50">
@@ -337,6 +349,15 @@ function OperationRegistryTab() {
                     <div className="text-xs text-gray-700">{entry.handlerType}</div>
                     {entry.providerId && (
                       <div className="text-xs text-gray-400 font-mono">{entry.providerId}</div>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    {entry.resultChartType ? (
+                      <span className="inline-flex items-center rounded-full bg-blue-50 border border-blue-200 px-2 py-0.5 font-mono text-[10px] text-blue-700">
+                        {entry.resultChartType}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-gray-300">—</span>
                     )}
                   </td>
                   <td className="px-4 py-3 text-xs text-gray-600">{entry.timeoutMs / 1000}s</td>
@@ -371,18 +392,20 @@ function OperationRegistryTab() {
 // ── Add Operation Form ────────────────────────────────────────────────────────
 
 interface AddOpFormProps {
-  onSubmit:  (req: AddOperationRequest) => void;
-  onCancel:  () => void;
-  isPending: boolean;
-  error:     string | null;
+  onSubmit:          (req: AddOperationRequest) => void;
+  onCancel:          () => void;
+  isPending:         boolean;
+  error:             string | null;
+  chartTypeOptions:  string[];
 }
 
-function AddOperationForm({ onSubmit, onCancel, isPending, error }: AddOpFormProps) {
+function AddOperationForm({ onSubmit, onCancel, isPending, error, chartTypeOptions }: AddOpFormProps) {
   const [form, setForm] = useState<AddOperationRequest>({
     operationPattern: '',
     handlerType:      'provider',
     providerId:       null,
     paramsSchemaJson: null,
+    resultChartType:  null,
     timeoutMs:        30000,
     cacheable:        false,
     cacheTtlSeconds:  null,
@@ -428,6 +451,19 @@ function AddOperationForm({ onSubmit, onCancel, isPending, error }: AddOpFormPro
             placeholder="excel-provider"
             className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-mono focus:border-brand-500 focus:ring-1 focus:ring-brand-500 outline-none"
           />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-700 mb-1">Result Chart Type</label>
+          <select
+            value={form.resultChartType ?? ''}
+            onChange={(e) => set('resultChartType', e.target.value || null)}
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:ring-1 focus:ring-brand-500 outline-none"
+          >
+            <option value="">— none —</option>
+            {chartTypeOptions.map(ct => (
+              <option key={ct} value={ct}>{ct}</option>
+            ))}
+          </select>
         </div>
         <div>
           <label className="block text-xs font-medium text-gray-700 mb-1">Timeout (ms)</label>
@@ -498,18 +534,20 @@ function AddOperationForm({ onSubmit, onCancel, isPending, error }: AddOpFormPro
 // ── Edit Operation Row ────────────────────────────────────────────────────────
 
 interface EditRowProps {
-  entry:     OperationEntry;
-  onSave:    (req: UpdateOperationRequest) => void;
-  onCancel:  () => void;
-  isPending: boolean;
-  error:     string | null;
+  entry:            OperationEntry;
+  onSave:           (req: UpdateOperationRequest) => void;
+  onCancel:         () => void;
+  isPending:        boolean;
+  error:            string | null;
+  chartTypeOptions: string[];
 }
 
-function EditOperationRow({ entry, onSave, onCancel, isPending, error }: EditRowProps) {
+function EditOperationRow({ entry, onSave, onCancel, isPending, error, chartTypeOptions }: EditRowProps) {
   const [form, setForm] = useState<UpdateOperationRequest>({
     handlerType:      entry.handlerType,
     providerId:       entry.providerId,
     paramsSchemaJson: entry.paramsSchema ?? null,
+    resultChartType:  entry.resultChartType ?? null,
     timeoutMs:        entry.timeoutMs,
     cacheable:        entry.cacheable,
     cacheTtlSeconds:  entry.cacheTtlSeconds,
@@ -539,6 +577,18 @@ function EditOperationRow({ entry, onSave, onCancel, isPending, error }: EditRow
           className="mt-1 w-full rounded border border-gray-300 px-2 py-1 text-xs font-mono focus:border-brand-500 outline-none"
           placeholder="provider-id"
         />
+      </td>
+      <td className="px-4 py-3">
+        <select
+          value={form.resultChartType ?? ''}
+          onChange={(e) => set('resultChartType', e.target.value || null)}
+          className="w-full rounded border border-gray-300 px-2 py-1 text-xs focus:border-brand-500 outline-none"
+        >
+          <option value="">— none —</option>
+          {chartTypeOptions.map(ct => (
+            <option key={ct} value={ct}>{ct}</option>
+          ))}
+        </select>
       </td>
       <td className="px-4 py-3">
         <input

@@ -4,11 +4,14 @@ import { ProtectedRoute } from './auth/ProtectedRoute';
 import { Layout } from './components/Layout';
 import { Dashboard } from './pages/Dashboard';
 import { ReportScreen } from './pages/ReportScreen';
+import { ModulePage } from './pages/ModulePage';
 import { Admin } from './pages/Admin';
 import { ProviderOperations } from './pages/admin/ProviderOperations';
 import { TestConsole } from './pages/admin/TestConsole';
 import { DataSyncMonitor } from './pages/admin/DataSyncMonitor';
 import { MenuManager } from './pages/admin/MenuManager';
+import { AdminModuleList }   from './pages/admin/AdminModuleList';
+import { DashboardDesigner } from './pages/admin/DashboardDesigner';
 
 // Handle the OIDC callback (silent renew / redirect back)
 function OidcCallback() {
@@ -31,6 +34,7 @@ export default function App() {
             <Layout>
               <Routes>
                 <Route path="/"                    element={<Dashboard />} />
+                <Route path="/m/:slug"            element={<ModulePage />} />
                 <Route path="/reports/:menuSlug"  element={<ReportScreen />} />
                 {/* Admin sub-pages */}
                 <Route path="/admin"              element={<Admin />} />
@@ -38,6 +42,8 @@ export default function App() {
                 <Route path="/admin/test"         element={<TestConsole />} />
                 <Route path="/admin/sync"         element={<DataSyncMonitor />} />
                 <Route path="/admin/menus"        element={<MenuManager />} />
+                <Route path="/admin/modules"               element={<AdminModuleList />} />
+                <Route path="/admin/modules/:slug/design" element={<DashboardDesigner />} />
               </Routes>
             </Layout>
           </ProtectedRoute>

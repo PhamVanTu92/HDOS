@@ -29,7 +29,9 @@ public sealed class AdminOperationsController : ControllerBase
     // ── GET /api/v1/admin/operations ─────────────────────────────────────────
 
     [HttpGet]
-    public async Task<IActionResult> ListAsync(CancellationToken ct)
+    public async Task<IActionResult> ListAsync(
+        [FromQuery] string? resultChartType,
+        CancellationToken ct)
     {
         var rows = new List<object>();
 
@@ -38,10 +40,12 @@ public sealed class AdminOperationsController : ControllerBase
         cmd.CommandText = """
             SELECT id, operation_pattern, handler_type, provider_id,
                    params_schema::text, timeout_ms, cacheable, cache_ttl_seconds,
-                   idempotent, status, created_at, updated_at
+                   idempotent, status, created_at, updated_at, result_chart_type
             FROM operation_registry
+            WHERE ($1::text IS NULL OR result_chart_type = $1)
             ORDER BY operation_pattern
             """;
+        cmd.Parameters.AddWithValue(resultChartType is null ? DBNull.Value : (object)resultChartType);
 
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
@@ -60,6 +64,7 @@ public sealed class AdminOperationsController : ControllerBase
                 status           = reader.GetString(9),
                 createdAt        = reader.GetDateTime(10),
                 updatedAt        = reader.GetDateTime(11),
+                resultChartType  = reader.IsDBNull(12) ? null : reader.GetString(12),
             });
         }
 
@@ -87,12 +92,12 @@ public sealed class AdminOperationsController : ControllerBase
         cmd.CommandText = """
             INSERT INTO operation_registry
                 (operation_pattern, handler_type, provider_id, params_schema,
-                 timeout_ms, cacheable, cache_ttl_seconds, idempotent)
-            VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7, $8)
+                 timeout_ms, cacheable, cache_ttl_seconds, idempotent, result_chart_type)
+            VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7, $8, $9)
             ON CONFLICT (operation_pattern) DO NOTHING
             RETURNING id, operation_pattern, handler_type, provider_id,
                       params_schema::text, timeout_ms, cacheable, cache_ttl_seconds,
-                      idempotent, status, created_at, updated_at
+                      idempotent, status, created_at, updated_at, result_chart_type
             """;
         cmd.Parameters.AddWithValue(req.OperationPattern.Trim());
         cmd.Parameters.AddWithValue(string.IsNullOrWhiteSpace(req.HandlerType) ? "provider" : req.HandlerType.Trim());
@@ -102,6 +107,7 @@ public sealed class AdminOperationsController : ControllerBase
         cmd.Parameters.AddWithValue(req.Cacheable);
         cmd.Parameters.AddWithValue(req.CacheTtlSeconds.HasValue ? (object)req.CacheTtlSeconds.Value : DBNull.Value);
         cmd.Parameters.AddWithValue(req.Idempotent);
+        cmd.Parameters.AddWithValue(req.ResultChartType is null ? DBNull.Value : (object)req.ResultChartType.Trim());
 
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         if (!await reader.ReadAsync(ct))
@@ -145,11 +151,12 @@ public sealed class AdminOperationsController : ControllerBase
                 cache_ttl_seconds = $7,
                 idempotent        = $8,
                 status            = $9,
+                result_chart_type = $10,
                 updated_at        = NOW()
             WHERE operation_pattern = $1
             RETURNING id, operation_pattern, handler_type, provider_id,
                       params_schema::text, timeout_ms, cacheable, cache_ttl_seconds,
-                      idempotent, status, created_at, updated_at
+                      idempotent, status, created_at, updated_at, result_chart_type
             """;
         cmd.Parameters.AddWithValue(decoded);
         cmd.Parameters.AddWithValue(string.IsNullOrWhiteSpace(req.HandlerType) ? "provider" : req.HandlerType.Trim());
@@ -160,6 +167,7 @@ public sealed class AdminOperationsController : ControllerBase
         cmd.Parameters.AddWithValue(req.CacheTtlSeconds.HasValue ? (object)req.CacheTtlSeconds.Value : DBNull.Value);
         cmd.Parameters.AddWithValue(req.Idempotent);
         cmd.Parameters.AddWithValue(string.IsNullOrWhiteSpace(req.Status) ? "active" : req.Status.Trim());
+        cmd.Parameters.AddWithValue(req.ResultChartType is null ? DBNull.Value : (object)req.ResultChartType.Trim());
 
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         if (!await reader.ReadAsync(ct))
@@ -214,6 +222,7 @@ public sealed class AdminOperationsController : ControllerBase
         status           = r.GetString(9),
         createdAt        = r.GetDateTime(10),
         updatedAt        = r.GetDateTime(11),
+        resultChartType  = r.IsDBNull(12) ? null : r.GetString(12),
     };
 }
 
@@ -229,6 +238,7 @@ public sealed record AddOperationRequest
     public bool Cacheable { get; init; } = false;
     public int? CacheTtlSeconds { get; init; }
     public bool Idempotent { get; init; } = true;
+    public string? ResultChartType { get; init; }
 }
 
 public sealed record UpdateOperationRequest
@@ -241,4 +251,5 @@ public sealed record UpdateOperationRequest
     public int? CacheTtlSeconds { get; init; }
     public bool Idempotent { get; init; } = true;
     public string Status { get; init; } = "active";
+    public string? ResultChartType { get; init; }
 }
