@@ -257,6 +257,64 @@ public sealed class AdminModuleController : ControllerBase
         return Created("", new { id = r.GetGuid(0), slug = r.GetString(1), label = r.GetString(2) });
     }
 
+    // ── PUT /api/v1/admin/modules/{slug}/tabs/{tabId} ────────────────────────
+
+    [HttpPut("{slug}/tabs/{tabId:guid}")]
+    public async Task<IActionResult> UpdateTabAsync(
+        string slug,
+        Guid tabId,
+        [FromBody] UpsertTabRequest req,
+        CancellationToken ct)
+    {
+        await using var conn = await _db.OpenConnectionAsync(ct);
+        await using var cmd  = conn.CreateCommand();
+        cmd.CommandText = """
+            UPDATE module_tabs SET
+                label      = $3,
+                sort_order = $4,
+                is_default = $5,
+                updated_at = NOW()
+            WHERE id = $1
+              AND module_id = (SELECT id FROM modules WHERE slug = $2)
+            RETURNING id
+            """;
+        cmd.Parameters.AddWithValue(tabId);
+        cmd.Parameters.AddWithValue(slug);
+        cmd.Parameters.AddWithValue(req.Label?.Trim() ?? "Tab");
+        cmd.Parameters.AddWithValue(req.SortOrder);
+        cmd.Parameters.AddWithValue(req.IsDefault);
+
+        var updated = await cmd.ExecuteScalarAsync(ct);
+        if (updated is null)
+            return NotFound(new { error = "Tab not found or does not belong to this module." });
+        return Ok(new { id = updated });
+    }
+
+    // ── DELETE /api/v1/admin/modules/{slug}/tabs/{tabId} ─────────────────────
+
+    [HttpDelete("{slug}/tabs/{tabId:guid}")]
+    public async Task<IActionResult> DeleteTabAsync(
+        string slug,
+        Guid tabId,
+        CancellationToken ct)
+    {
+        await using var conn = await _db.OpenConnectionAsync(ct);
+        await using var cmd  = conn.CreateCommand();
+        cmd.CommandText = """
+            DELETE FROM module_tabs
+            WHERE id = $1
+              AND module_id = (SELECT id FROM modules WHERE slug = $2)
+            RETURNING id
+            """;
+        cmd.Parameters.AddWithValue(tabId);
+        cmd.Parameters.AddWithValue(slug);
+
+        var deleted = await cmd.ExecuteScalarAsync(ct);
+        if (deleted is null)
+            return NotFound(new { error = "Tab not found or does not belong to this module." });
+        return NoContent();
+    }
+
     // ── PUT /api/v1/admin/modules/{slug}/tabs/{tabId}/widgets ─────────────────
     // Upsert widget layout for a tab (full replacement — react-grid-layout saves whole canvas)
 

@@ -21,6 +21,8 @@ import {
 } from '../../api/adminModules';
 import type { ModuleGroup } from '../../api/adminModules';
 import type { AdminModule, UpsertModuleRequest } from '../../types/module';
+import { DynamicIcon } from '../../components/DynamicIcon';
+import { IconPickerModal } from '../../components/IconPickerModal';
 
 // ── Form state ────────────────────────────────────────────────────────────────
 
@@ -98,6 +100,7 @@ function ModuleFormModal({
 }: ModuleFormModalProps) {
   const [form, setForm] = useState<ModuleFormState>(initial);
   const firstInputRef = useRef<HTMLInputElement>(null);
+  const [showIconPicker, setShowIconPicker] = useState(false);
 
   // Focus first editable field on open
   useEffect(() => { firstInputRef.current?.focus(); }, []);
@@ -183,14 +186,40 @@ function ModuleFormModal({
 
           {/* Icon */}
           <div>
-            <label className="hdos-section-label block mb-1.5">Icon <span style={{ color: 'var(--tx3)' }}>(tuỳ chọn)</span></label>
-            <input
-              type="text"
-              value={form.icon}
-              onChange={e => set('icon', e.target.value)}
-              placeholder="vd: 📊 hoặc chart-bar"
-              className="hdos-input"
-            />
+            <label className="hdos-section-label block mb-1.5">
+              Icon <span style={{ color: 'var(--tx3)' }}>(tuỳ chọn)</span>
+            </label>
+            <button
+              type="button"
+              onClick={() => setShowIconPicker(true)}
+              className="hdos-input flex items-center gap-2 text-left w-full"
+              style={{ cursor: 'pointer', minHeight: 38 }}
+            >
+              {form.icon ? (
+                <>
+                  <DynamicIcon name={form.icon} size={18} className="shrink-0" />
+                  <span className="flex-1 text-sm">{form.icon}</span>
+                  <span
+                    role="button"
+                    onClick={e => { e.stopPropagation(); set('icon', ''); }}
+                    className="shrink-0 text-xs px-1 rounded hover:bg-[--danger-bg] hover:text-[--danger]"
+                    style={{ color: 'var(--tx3)' }}
+                    title="Xóa icon"
+                  >
+                    ✕
+                  </span>
+                </>
+              ) : (
+                <span style={{ color: 'var(--tx3)' }}>Nhấn để chọn icon...</span>
+              )}
+            </button>
+            {showIconPicker && (
+              <IconPickerModal
+                current={form.icon || undefined}
+                onSelect={name => { set('icon', name); setShowIconPicker(false); }}
+                onClose={() => setShowIconPicker(false)}
+              />
+            )}
           </div>
 
           {/* Description */}
@@ -310,7 +339,9 @@ function ModuleCard({ module: m, onDesign, onEdit, onDelete }: ModuleCardProps) 
       {/* Top row: icon + label + slug + badge */}
       <div className="flex items-start gap-3">
         {m.icon && (
-          <span className="text-xl leading-none shrink-0 mt-0.5">{m.icon}</span>
+          <span className="shrink-0 mt-0.5 flex items-center justify-center w-6 h-6" style={{ color: 'var(--brand)' }}>
+            <DynamicIcon name={m.icon} size={22} />
+          </span>
         )}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">

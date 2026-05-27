@@ -63,6 +63,24 @@ export function createTab(moduleSlug: string, req: CreateTabRequest): Promise<{ 
   return apiPost(`/api/v1/admin/modules/${moduleSlug}/tabs`, req);
 }
 
+export interface UpdateTabRequest {
+  label?:     string;
+  sortOrder?: number;
+  isDefault?: boolean;
+}
+
+export function updateTab(
+  moduleSlug: string,
+  tabId: string,
+  req: UpdateTabRequest,
+): Promise<{ id: string }> {
+  return apiPut(`/api/v1/admin/modules/${moduleSlug}/tabs/${tabId}`, req);
+}
+
+export function deleteTab(moduleSlug: string, tabId: string): Promise<void> {
+  return apiDelete(`/api/v1/admin/modules/${moduleSlug}/tabs/${tabId}`);
+}
+
 // ── Widget Canvas ─────────────────────────────────────────────────────────────
 
 export interface SaveWidgetsResponse {

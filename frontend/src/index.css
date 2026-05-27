@@ -47,6 +47,59 @@
   --alert-L3: #4da3ff;
 }
 
+/* ── Light Theme ──────────────────────────────────────────────────────────── */
+
+[data-theme="light"] {
+  /* Surfaces */
+  --bg:        #f1f5f9;
+  --surface:   #ffffff;
+  --card:      #ffffff;
+  --card-hover:#f8fafc;
+  --overlay:   #f1f5f9;
+
+  /* Borders */
+  --border:    rgba(0,0,0,0.08);
+  --border-md: rgba(0,0,0,0.14);
+  --border-hl: rgba(0,0,0,0.22);
+
+  /* Text */
+  --tx:        #1e293b;
+  --tx2:       #475569;
+  --tx3:       #94a3b8;
+
+  /* Brand (same) */
+  --brand:     #1a73d4;
+  --brand-hl:  #1565c0;
+  --brand-dim: rgba(26,115,212,0.10);
+
+  /* Status */
+  --success:   #16a34a;
+  --warning:   #d97706;
+  --danger:    #dc2626;
+  --info:      #2563eb;
+  --purple:    #7c3aed;
+  --teal:      #0891b2;
+
+  /* Status backgrounds */
+  --success-bg: rgba(22,163,74,0.08);
+  --warning-bg: rgba(217,119,6,0.08);
+  --danger-bg:  rgba(220,38,38,0.08);
+  --info-bg:    rgba(37,99,235,0.08);
+
+  /* Alert levels */
+  --alert-L1: #dc2626;
+  --alert-L2: #d97706;
+  --alert-L3: #2563eb;
+}
+
+[data-theme="light"] .hdos-card {
+  box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.05);
+}
+
+[data-theme="light"] ::-webkit-scrollbar-thumb {
+  background: rgba(0,0,0,0.15);
+}
+
 /* ── Base styles ──────────────────────────────────────────────────────────── */
 
 @layer base {

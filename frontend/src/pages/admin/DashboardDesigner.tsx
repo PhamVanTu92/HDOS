@@ -16,7 +16,9 @@ import type { Layout, LayoutItem } from 'react-grid-layout';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 import { apiGet } from '../../api/client';
-import { saveWidgets, listWidgetSchemas } from '../../api/adminModules';
+import { saveWidgets, listWidgetSchemas, createTab, updateTab, deleteTab } from '../../api/adminModules';
+import { listProviders, listOperations } from '../../api/admin';
+import type { ProviderInfo, OperationEntry } from '../../api/admin';
 import type {
   ModuleLayout,
   ModuleTab,
@@ -366,26 +368,29 @@ function WidgetCatalogPanel({ catalog, onAdd }: WidgetCatalogPanelProps) {
 // ── WidgetPropertiesPanel ──────────────────────────────────────────────────────
 
 interface WidgetPropertiesPanelProps {
-  widget:    DesignerWidget;
-  onApply:   (updated: DesignerWidget) => void;
-  onDelete:  (key: string) => void;
+  widget:     DesignerWidget;
+  catalog:    WidgetTypeCatalogEntry[];
+  providers:  ProviderInfo[];
+  operations: OperationEntry[];
+  onApply:    (updated: DesignerWidget) => void;
+  onDelete:   (key: string) => void;
 }
 
-function WidgetPropertiesPanel({ widget, onApply, onDelete }: WidgetPropertiesPanelProps) {
-  // Form state — khởi tạo từ widget hiện tại, reset khi widgetKey đổi
+function WidgetPropertiesPanel({
+  widget, catalog, providers, operations, onApply, onDelete,
+}: WidgetPropertiesPanelProps) {
   const [form, setForm] = useState<DesignerWidget>(widget);
 
-  useEffect(() => {
-    setForm(widget);
-  }, [widget.widgetKey]);
+  useEffect(() => { setForm(widget); }, [widget.widgetKey]);
 
   function set<K extends keyof DesignerWidget>(key: K, value: DesignerWidget[K]) {
     setForm(prev => ({ ...prev, [key]: value }));
   }
 
-  function handleApply() {
-    onApply(form);
-  }
+  // Operations filtered by selected provider (if any)
+  const filteredOps = form.providerId
+    ? operations.filter(op => op.providerId === form.providerId || op.providerId === null)
+    : operations;
 
   return (
     <div className="flex flex-col h-full">
@@ -397,6 +402,7 @@ function WidgetPropertiesPanel({ widget, onApply, onDelete }: WidgetPropertiesPa
       </div>
 
       <div className="flex-1 overflow-y-auto px-3 py-3 space-y-3">
+
         {/* Title */}
         <FormField label="Tiêu đề">
           <input
@@ -419,37 +425,75 @@ function WidgetPropertiesPanel({ widget, onApply, onDelete }: WidgetPropertiesPa
           />
         </FormField>
 
-        {/* Chart Type */}
+        {/* Chart Type — combobox từ catalog */}
         <FormField label="Loại chart">
-          <input
-            type="text"
+          <select
             value={form.chartType}
             onChange={e => set('chartType', e.target.value)}
-            placeholder="vd: kpi_grid, line_chart..."
             className={inputCls}
-          />
+          >
+            <option value="">-- Chọn loại chart --</option>
+            {CATEGORY_ORDER.map(cat => {
+              const entries = catalog.filter(e => e.category === cat);
+              if (!entries.length) return null;
+              return (
+                <optgroup key={cat} label={CATEGORY_LABELS[cat] ?? cat}>
+                  {entries.map(e => (
+                    <option key={e.chartType} value={e.chartType}>
+                      {e.label}
+                    </option>
+                  ))}
+                </optgroup>
+              );
+            })}
+          </select>
         </FormField>
 
-        {/* Operation Pattern */}
+        {/* Provider ID — combobox từ providers list */}
+        <FormField label="Provider">
+          <select
+            value={form.providerId}
+            onChange={e => {
+              set('providerId', e.target.value);
+              // Clear operation if it doesn't match new provider
+              set('operationPattern', '');
+            }}
+            className={inputCls}
+          >
+            <option value="">-- Không chọn / Tự động --</option>
+            {providers.map(p => (
+              <option key={p.providerId} value={p.providerId}>
+                {p.displayName} ({p.providerId})
+              </option>
+            ))}
+          </select>
+        </FormField>
+
+        {/* Operation Pattern — combobox từ operations, filtered by provider */}
         <FormField label="Operation Pattern">
-          <input
-            type="text"
+          <select
             value={form.operationPattern}
             onChange={e => set('operationPattern', e.target.value)}
-            placeholder="vd: report.dashboard.summary"
             className={inputCls}
-          />
-        </FormField>
-
-        {/* Provider ID */}
-        <FormField label="Provider ID">
-          <input
-            type="text"
-            value={form.providerId}
-            onChange={e => set('providerId', e.target.value)}
-            placeholder="vd: excel-provider"
-            className={inputCls}
-          />
+          >
+            <option value="">-- Chọn operation --</option>
+            {filteredOps.map(op => (
+              <option key={op.id} value={op.operationPattern}>
+                {op.operationPattern}
+                {op.providerId ? ` [${op.providerId}]` : ''}
+              </option>
+            ))}
+          </select>
+          {/* Fallback: manual input if ops list is empty */}
+          {filteredOps.length === 0 && (
+            <input
+              type="text"
+              value={form.operationPattern}
+              onChange={e => set('operationPattern', e.target.value)}
+              placeholder="vd: report.dashboard.summary"
+              className={`${inputCls} mt-1`}
+            />
+          )}
         </FormField>
 
         {/* Filter Key */}
@@ -464,7 +508,7 @@ function WidgetPropertiesPanel({ widget, onApply, onDelete }: WidgetPropertiesPa
         </FormField>
 
         {/* Params Template */}
-        <FormField label='Params Template (JSON)'>
+        <FormField label="Params Template (JSON)">
           <textarea
             value={form.paramsTemplate}
             onChange={e => set('paramsTemplate', e.target.value)}
@@ -485,7 +529,7 @@ function WidgetPropertiesPanel({ widget, onApply, onDelete }: WidgetPropertiesPa
           />
         </FormField>
 
-        {/* Grid info — read-only, cập nhật tự động qua drag/resize */}
+        {/* Grid info — read-only */}
         <FormField label="Vị trí lưới (tự động)">
           <div className="grid grid-cols-4 gap-1 text-[10px] text-[--tx3] font-mono">
             <span className="bg-[--bg] rounded px-1.5 py-1 text-center">x:{form.gridX}</span>
@@ -499,7 +543,7 @@ function WidgetPropertiesPanel({ widget, onApply, onDelete }: WidgetPropertiesPa
       {/* Actions */}
       <div className="px-3 py-3 border-t border-[--border] space-y-2">
         <button
-          onClick={handleApply}
+          onClick={() => onApply(form)}
           className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md bg-[--brand] hover:bg-[--brand-hl] text-white text-xs font-medium transition-colors"
         >
           <CheckIcon />
@@ -563,10 +607,18 @@ export function DashboardDesigner() {
   const navigate  = useNavigate();
 
   // ── Data state ───────────────────────────────────────────────────────────────
-  const [tabs,    setTabs]    = useState<ModuleTab[]>([]);
-  const [catalog, setCatalog] = useState<WidgetTypeCatalogEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const [tabs,       setTabs]       = useState<ModuleTab[]>([]);
+  const [catalog,    setCatalog]    = useState<WidgetTypeCatalogEntry[]>([]);
+  const [providers,  setProviders]  = useState<ProviderInfo[]>([]);
+  const [operations, setOperations] = useState<OperationEntry[]>([]);
+  const [loading,    setLoading]    = useState(true);
+  const [loadError,  setLoadError]  = useState<string | null>(null);
+
+  // ── Tab management state ─────────────────────────────────────────────────────
+  const [isAddingTab,  setIsAddingTab]  = useState(false);
+  const [newTabLabel,  setNewTabLabel]  = useState('');
+  const [editingTabId, setEditingTabId] = useState<string | null>(null);
+  const [editTabLabel, setEditTabLabel] = useState('');
 
   // Lưu toàn bộ widgets của mọi tab: Map<tabId, DesignerWidget[]>
   const [widgetsByTab, setWidgetsByTab] = useState<Map<string, DesignerWidget[]>>(new Map());
@@ -596,12 +648,16 @@ export function DashboardDesigner() {
     setSelectedKey(null);
 
     try {
-      const [layout, schemas] = await Promise.all([
+      const [layout, schemas, provs, ops] = await Promise.all([
         apiGet<ModuleLayout>(`/api/v1/modules/${slug}/layout`),
         listWidgetSchemas(),
+        listProviders().catch(() => [] as ProviderInfo[]),
+        listOperations().catch(() => [] as OperationEntry[]),
       ]);
 
       setCatalog(schemas);
+      setProviders(provs);
+      setOperations(ops);
       setTabs(layout.tabs);
 
       // Khởi tạo widgetsByTab
@@ -676,6 +732,70 @@ export function DashboardDesigner() {
   function handleTabChange(tabId: string) {
     setActiveTabId(tabId);
     setSelectedKey(null);
+    setEditingTabId(null);
+  }
+
+  // ── Tab management ───────────────────────────────────────────────────────────
+
+  function startEditTab(tab: ModuleTab) {
+    setEditingTabId(tab.id);
+    setEditTabLabel(tab.label);
+  }
+
+  async function saveTabRename(tabId: string) {
+    const label = editTabLabel.trim();
+    setEditingTabId(null);
+    if (!label || label === tabs.find(t => t.id === tabId)?.label) return;
+    try {
+      await updateTab(slug!, tabId, { label });
+      setTabs(prev => prev.map(t => t.id === tabId ? { ...t, label } : t));
+    } catch (err) {
+      console.error('Rename tab failed:', err);
+    }
+  }
+
+  async function saveNewTab() {
+    const label = newTabLabel.trim();
+    setIsAddingTab(false);
+    setNewTabLabel('');
+    if (!label) return;
+    try {
+      const slugVal = label.toLowerCase()
+        .replace(/\s+/g, '-')
+        .replace(/[^a-z0-9-]/g, '')
+        || 'tab';
+      const result = await createTab(slug!, { slug: slugVal, label, sortOrder: tabs.length });
+      const newTab: ModuleTab = {
+        id: result.id, slug: result.slug, label: result.label,
+        sortOrder: tabs.length, isDefault: false, widgets: [],
+      };
+      setTabs(prev => [...prev, newTab]);
+      setWidgetsByTab(prev => { const next = new Map(prev); next.set(result.id, []); return next; });
+      setActiveTabId(result.id);
+    } catch (err) {
+      console.error('Add tab failed:', err);
+    }
+  }
+
+  async function handleDeleteTab(tabId: string) {
+    if (tabs.length <= 1) {
+      alert('Không thể xóa tab duy nhất còn lại.');
+      return;
+    }
+    const tab = tabs.find(t => t.id === tabId);
+    if (!window.confirm(`Xóa tab "${tab?.label ?? ''}"?\nTất cả widget trong tab này sẽ bị xóa.`)) return;
+    try {
+      await deleteTab(slug!, tabId);
+      const remaining = tabs.filter(t => t.id !== tabId);
+      setTabs(remaining);
+      setWidgetsByTab(prev => { const next = new Map(prev); next.delete(tabId); return next; });
+      if (activeTabId === tabId) {
+        const fallback = remaining.find(t => t.isDefault) ?? remaining[0];
+        if (fallback) setActiveTabId(fallback.id);
+      }
+    } catch (err) {
+      alert('Lỗi xóa tab: ' + (err instanceof Error ? err.message : String(err)));
+    }
   }
 
   // ── Grid layout change (kéo/resize) ─────────────────────────────────────────
@@ -808,28 +928,88 @@ export function DashboardDesigner() {
           {slug ?? 'Module'} — Dashboard Designer
         </h1>
 
-        {/* Tab selector */}
-        {tabs.length > 0 && (
-          <div className="flex items-center gap-1 ml-2">
-            <span className="text-xs text-[--tx3]">Tab:</span>
-            <div className="flex gap-1">
-              {tabs.map(tab => (
+        {/* Tab management */}
+        <div className="flex items-center gap-1 ml-2 overflow-x-auto max-w-[50vw]">
+          {tabs.map(tab => (
+            <div key={tab.id} className="relative group flex-shrink-0 flex items-center">
+              {editingTabId === tab.id ? (
+                /* Inline rename input */
+                <input
+                  autoFocus
+                  value={editTabLabel}
+                  onChange={e => setEditTabLabel(e.target.value)}
+                  onBlur={() => void saveTabRename(tab.id)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') void saveTabRename(tab.id);
+                    if (e.key === 'Escape') setEditingTabId(null);
+                  }}
+                  className="px-2 py-1 rounded-md text-xs bg-[--bg] border border-[--brand] text-[--tx] outline-none w-28"
+                />
+              ) : (
                 <button
-                  key={tab.id}
                   onClick={() => handleTabChange(tab.id)}
                   className={[
-                    'px-2.5 py-1 rounded-md text-xs font-medium transition-colors',
+                    'flex items-center gap-1 pl-2.5 pr-1 py-1 rounded-md text-xs font-medium transition-colors whitespace-nowrap',
                     tab.id === activeTabId
                       ? 'bg-[--brand] text-white'
                       : 'text-[--tx2] hover:bg-[--overlay] hover:text-[--tx]',
                   ].join(' ')}
                 >
                   {tab.label}
+                  {/* Edit / Delete — visible on hover */}
+                  <span className="flex items-center gap-0 opacity-0 group-hover:opacity-100 transition-opacity ml-0.5">
+                    <span
+                      role="button"
+                      onClick={e => { e.stopPropagation(); startEditTab(tab); }}
+                      className="p-0.5 rounded hover:bg-white/25"
+                      title="Đổi tên tab"
+                    >
+                      <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                          d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                      </svg>
+                    </span>
+                    <span
+                      role="button"
+                      onClick={e => { e.stopPropagation(); void handleDeleteTab(tab.id); }}
+                      className="p-0.5 rounded hover:bg-red-500/30 text-red-300"
+                      title="Xóa tab"
+                    >
+                      <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </span>
+                  </span>
                 </button>
-              ))}
+              )}
             </div>
-          </div>
-        )}
+          ))}
+
+          {/* Add tab */}
+          {isAddingTab ? (
+            <input
+              autoFocus
+              value={newTabLabel}
+              onChange={e => setNewTabLabel(e.target.value)}
+              onBlur={() => void saveNewTab()}
+              onKeyDown={e => {
+                if (e.key === 'Enter') void saveNewTab();
+                if (e.key === 'Escape') { setIsAddingTab(false); setNewTabLabel(''); }
+              }}
+              placeholder="Tên tab..."
+              className="px-2 py-1 rounded-md text-xs bg-[--bg] border border-[--brand] text-[--tx] outline-none w-28 flex-shrink-0"
+            />
+          ) : (
+            <button
+              onClick={() => setIsAddingTab(true)}
+              className="flex items-center gap-0.5 px-2 py-1 rounded-md text-xs text-[--tx3] hover:text-[--tx] hover:bg-[--overlay] transition-colors flex-shrink-0"
+              title="Thêm tab mới"
+            >
+              <PlusIcon />
+              <span>Tab</span>
+            </button>
+          )}
+        </div>
 
         {/* Spacer */}
         <div className="flex-1" />
@@ -917,6 +1097,9 @@ export function DashboardDesigner() {
             <WidgetPropertiesPanel
               key={selectedWidget.widgetKey}
               widget={selectedWidget}
+              catalog={catalog}
+              providers={providers}
+              operations={operations}
               onApply={handleApplyProperties}
               onDelete={handleDeleteWidget}
             />

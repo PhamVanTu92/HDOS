@@ -3,6 +3,7 @@ import { NavLink } from 'react-router-dom';
 import { hasRealmRole, apiGet } from '../api/client';
 import type { SidebarGroup } from '../types/module';
 import type { MenuSummary } from '../types/menuTypes';
+import { DynamicIcon } from './DynamicIcon';
 
 interface NavItem {
   to:    string;
@@ -148,8 +149,10 @@ function ModuleNavItems({ groups, open }: { groups: SidebarGroup[]; open: boolea
               to={`/m/${mod.slug}`}
               className={({ isActive }) => navCls(isActive, open)}
             >
-              <span className="shrink-0 text-base leading-none w-5 text-center">
-                {mod.icon ?? '▪'}
+              <span className="shrink-0 flex items-center justify-center h-5 w-5">
+                {mod.icon
+                  ? <DynamicIcon name={mod.icon} size={18} />
+                  : <span className="text-base leading-none">▪</span>}
               </span>
               {open && <span className="truncate">{mod.label}</span>}
             </NavLink>

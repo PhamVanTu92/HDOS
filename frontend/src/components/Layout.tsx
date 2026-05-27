@@ -2,6 +2,7 @@ import { type ReactNode, useState } from 'react';
 import { useAuth } from 'react-oidc-context';
 import { useSignalRConnection } from '../hooks/useSignalR';
 import { Sidebar } from './Sidebar';
+import { ThemeToggle } from './ThemeToggle';
 
 // ── Layout ────────────────────────────────────────────────────────────────────
 
@@ -47,7 +48,8 @@ export function Layout({ children }: { children: ReactNode }) {
             </svg>
           </button>
           <div className="flex-1" />
-          <span className="text-sm text-[--tx2]">{displayName}</span>
+          <ThemeToggle />
+          <span className="text-sm text-[--tx2] ml-2">{displayName}</span>
         </header>
 
         {/* Content */}

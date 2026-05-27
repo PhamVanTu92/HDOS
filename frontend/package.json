@@ -19,6 +19,7 @@
     "react-grid-layout": "^2.2.3",
     "react-oidc-context": "^3.2.0",
     "react-router-dom": "^6.26.2",
+    "lucide-react": "^0.400.0",
     "recharts": "^2.12.7",
     "uuid": "^10.0.0"
   },
