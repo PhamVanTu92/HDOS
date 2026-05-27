@@ -247,8 +247,8 @@ public sealed class AdminModuleController : ControllerBase
             RETURNING id, slug, label
             """;
         cmd.Parameters.AddWithValue(moduleId);
-        cmd.Parameters.AddWithValue(req.Slug.Trim());
-        cmd.Parameters.AddWithValue(req.Label.Trim());
+        cmd.Parameters.AddWithValue(req.Slug?.Trim() ?? "tab");
+        cmd.Parameters.AddWithValue(req.Label?.Trim() ?? "Tab");
         cmd.Parameters.AddWithValue(req.SortOrder);
         cmd.Parameters.AddWithValue(req.IsDefault);
 
@@ -307,10 +307,10 @@ public sealed class AdminModuleController : ControllerBase
                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13::jsonb,$14,$15::jsonb,$16,$17)
                 """;
             cmd.Parameters.AddWithValue(tabId);
-            cmd.Parameters.AddWithValue(w.WidgetKey);
+            cmd.Parameters.AddWithValue(w.WidgetKey ?? $"widget_{inserted}");
             cmd.Parameters.AddWithValue(w.Title is null ? DBNull.Value : (object)w.Title);
             cmd.Parameters.AddWithValue(w.Subtitle is null ? DBNull.Value : (object)w.Subtitle);
-            cmd.Parameters.AddWithValue(w.ChartType);
+            cmd.Parameters.AddWithValue(w.ChartType ?? "raw_json");
             cmd.Parameters.AddWithValue(w.GridX);
             cmd.Parameters.AddWithValue(w.GridY);
             cmd.Parameters.AddWithValue(w.GridW);
@@ -336,32 +336,32 @@ public sealed class AdminModuleController : ControllerBase
 
 public sealed record UpsertModuleRequest
 {
-    public Guid   GroupId              { get; init; }
-    public required string Slug        { get; init; }
-    public required string Label       { get; init; }
-    public string? Icon                { get; init; }
-    public string? Description         { get; init; }
-    public string[]? RequiredRoles     { get; init; }
-    public int    SortOrder            { get; init; } = 0;
-    public bool   IsVisible            { get; init; } = true;
-    public bool   IsActive             { get; init; } = true;
-    public int?   RefreshIntervalSeconds { get; init; }
+    public Guid    GroupId               { get; init; }
+    public string? Slug                  { get; init; }   // validated manually in CreateAsync
+    public string? Label                 { get; init; }   // validated manually in CreateAsync
+    public string? Icon                  { get; init; }
+    public string? Description           { get; init; }
+    public string[]? RequiredRoles       { get; init; }
+    public int     SortOrder             { get; init; } = 0;
+    public bool    IsVisible             { get; init; } = true;
+    public bool    IsActive              { get; init; } = true;
+    public int?    RefreshIntervalSeconds { get; init; }
 }
 
 public sealed record UpsertTabRequest
 {
-    public required string Slug  { get; init; }
-    public required string Label { get; init; }
+    public string? Slug  { get; init; }
+    public string? Label { get; init; }
     public int  SortOrder        { get; init; } = 0;
     public bool IsDefault        { get; init; } = false;
 }
 
 public sealed record UpsertWidgetRequest
 {
-    public required string WidgetKey  { get; init; }
+    public string? WidgetKey          { get; init; }
     public string? Title              { get; init; }
     public string? Subtitle           { get; init; }
-    public required string ChartType  { get; init; }
+    public string? ChartType          { get; init; }
     public int  GridX                 { get; init; }
     public int  GridY                 { get; init; }
     public int  GridW                 { get; init; } = 6;
