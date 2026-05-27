@@ -1,5 +1,5 @@
 # PROVIDER_ONBOARDING.md — Operator's Manual
-> Version: 6.1 | Audience: Platform administrators | Last updated: 2026-05-18
+> Version: 7.0 | Audience: Platform administrators | Last updated: 2026-05-27
 
 This document covers the full administrative lifecycle of an external provider: from first registration through monitoring, credential management, and decommission. An ops engineer with admin API access should be able to complete any procedure here without asking the platform team.
 
@@ -21,57 +21,66 @@ This document covers the full administrative lifecycle of an external provider: 
      - Their expected `maxConcurrentRequests` and circuit breaker preferences
 
 2. [Step 1 — Register the Provider](#2-step-1--register-the-provider)
-   - 2.1 Request
+   - 2.1 **Via Admin UI** (recommended):
+     - Go to **Admin UI → Admin page → Providers tab → "Đăng ký Provider"**
+     - Fill in: `providerId` (kebab-case, unique), `displayName`, `clientId` (usually same as providerId), `clientSecret` (temporary), operations list
+     - Click **Đăng ký**
+   - 2.2 **Via API**:
      ```http
      POST /api/v1/admin/providers
      Authorization: Bearer <admin-jwt>
      Content-Type: application/json
 
      {
-       "providerId": "ml-team-fraud",
-       "displayName": "ML Team — Fraud Scoring",
-       "description": "Real-time fraud scoring using gradient boosting model v3",
-       "operations": ["ml.fraud.score", "ml.fraud.batchScore"],
-       "chartTypes": [],
-       "transformers": [],
-       "timeoutMs": 5000,
-       "circuitBreaker": {
-         "failureThreshold": 0.5,
-         "samplingDurationSeconds": 30,
-         "minThroughput": 10,
-         "breakDurationSeconds": 60
-       },
-       "priority": "normal"
+       "providerId":   "ml-team-fraud",
+       "displayName":  "ML Team — Fraud Scoring",
+       "description":  "Real-time fraud scoring using gradient boosting model v3",
+       "clientId":     "ml-team-fraud",
+       "clientSecret": "temporary-placeholder",
+       "operations":   ["ml.fraud.score", "ml.fraud.batchScore"],
+       "timeoutMs":    5000,
+       "priority":     5
      }
      ```
-   - 2.2 Response (save this; `clientSecret` shown **ONCE**)
-     ```json
-     {
-       "providerId": "ml-team-fraud",
-       "clientId": "ml-team-fraud-c83hf",
-       "clientSecret": "rp_sk_...",
-       "tokenEndpoint": "https://platform/api/v1/providers/token",
-       "bridgeEndpoint": "grpcs://provider-bridge.platform:443",
-       "status": "active"
-     }
-     ```
-   - 2.3 Immediately record in your password manager before closing the response
-   - 2.4 Verify registration: `GET /api/v1/admin/providers/ml-team-fraud`
-     - Confirm `status: "active"`, `clientSecretHash` present, `clientSecret` absent
+     Response: `{ "providerId": "ml-team-fraud", "registeredAt": "..." }`
+   - 2.3 Verify: `GET /api/v1/admin/providers/ml-team-fraud` → confirm `status: "active"`
 
-3. [Step 2 — Secure Delivery of clientSecret](#3-step-2--secure-delivery-of-clientsecret)
-   - 3.1 Approved delivery methods (in order of preference)
-     - HashiCorp Vault: write to `secret/providers/ml-team-fraud/credentials`
-     - Kubernetes sealed secret: seal and commit to their GitOps repo
-     - AWS/GCP/Azure Secrets Manager: share access to the specific secret
-     - 1Password / Bitwarden shared vault entry (with expiry)
-   - 3.2 Forbidden delivery methods
-     - Slack (even DM, even "just for a second")
-     - Email (even internal)
-     - Jira / Confluence comments
-     - GitHub issues or PR comments
-     - Any plaintext channel that creates a persistent log
-   - 3.3 Confirm receipt: provider team acknowledges in your ticketing system
+3. [Step 2 — Set Secret & Generate Bootstrap Token](#3-step-2--set-secret--generate-bootstrap-token)
+   - 3.1 **Via Admin UI** (recommended):
+     - Go to **Admin UI → select provider → tab "Credentials"**
+     - Option A — **"Đặt secret cụ thể"**: enter desired secret → Save. Use this if provider team already has a secret they want to use.
+     - Option B — **"Xoay key"**: platform generates a cryptographically random secret. The plaintext is shown **once** — copy it if using direct-secret delivery.
+     - Then click **"Tạo Bootstrap Token"** → copy the token to deliver to provider team.
+   - 3.2 **Via API**:
+     ```http
+     # Set a specific secret
+     POST /api/v1/admin/providers/ml-team-fraud/credentials/set
+     Authorization: Bearer <admin-jwt>
+     { "newSecret": "chosen-secret-value" }
+
+     # Or rotate (platform generates random secret, returns plaintext once)
+     POST /api/v1/admin/providers/ml-team-fraud/credentials/rotate
+     Authorization: Bearer <admin-jwt>
+
+     # Generate bootstrap token
+     POST /api/v1/admin/providers/ml-team-fraud/bootstrap-token/regenerate
+     Authorization: Bearer <admin-jwt>
+     # → { "providerId": "ml-team-fraud", "bootstrapToken": "abc123..." }
+     ```
+   - 3.3 **Deliver to provider team** — send only:
+     - `bootstrapToken` (used once at provider startup to fetch the secret automatically)
+     - `HDOS_HOST` (IP/hostname of the HDOS platform)
+     - `tokenEndpoint`: `http://{HDOS_HOST}:5000/api/v1/providers/token`
+     - `bridgeGrpcUrl`: `http://{HDOS_HOST}:5400`
+
+     **Do NOT send `clientSecret` directly.** The provider calls the bootstrap API on startup:
+     ```
+     POST /api/v1/providers/bootstrap
+     { "clientId": "ml-team-fraud", "bootstrapToken": "abc123..." }
+     → { "clientSecret": "..." }
+     ```
+   - 3.4 If you ever need to verify the currently stored secret: `GET /api/v1/admin/providers/ml-team-fraud/credentials/reveal`
+   - 3.5 Confirm receipt: provider team acknowledges in your ticketing system
 
 4. [Step 3 — Register Provider's Operations](#4-step-3--register-providers-operations)
    - 4.1 One call per operation pattern
@@ -189,23 +198,24 @@ This document covers the full administrative lifecycle of an external provider: 
 
    - 6.4 After 1 hour clean: remove escalation watch; standard Grafana alert rules apply
 
-7. [Credential Rotation (Planned)](#7-credential-rotation-planned)
+7. [Credential Rotation](#7-credential-rotation)
    - 7.1 When to rotate
      - Every 90 days (recommended policy)
      - When a team member who knew the secret leaves the provider team
      - On any suspected credential exposure
-   - 7.2 Rotation procedure
+   - 7.2 Rotation procedure (Bootstrap Token method — zero-downtime)
      1. Notify provider team T-24h: "rotating credentials on [date/time]"
-     2. `POST /api/v1/admin/providers/ml-team-fraud/credentials/rotate`
-        - Response includes new `clientSecret` (shown once)
-     3. Deliver new secret via approved method (§3 above)
-     4. Old secret remains valid for **60 seconds** (grace period)
-     5. Provider team: update config + restart service within 60s
-     6. Confirm new `token_minted` event in audit log with new `clientId` (same) + new `jti`
-     7. After 60s: confirm old JWT requests return 401 via Bruno collection
+     2. In Admin UI → Credentials tab: click **"Xoay key"** (or use API `credentials/rotate`)
+        - New secret is stored and encrypted in DB
+     3. Click **"Tạo Bootstrap Token"** → send new token to provider team
+     4. Provider team: update `HDOS_BOOTSTRAP_TOKEN` in their `.env` + restart service
+        - On restart, provider calls bootstrap API → fetches new secret automatically
+     5. Old secret remains valid for **60 seconds** (grace period for in-flight auth)
+     6. Confirm new `token_minted` event in audit log
    - 7.3 Emergency rotation (suspected compromise)
      - Skip T-24h notice; call provider team directly
-     - Consider temporary suspend (§9) while coordinating new secret delivery
+     - Consider temporary suspend (§9) while coordinating
+     - Regenerate both secret and bootstrap token in Admin UI
 
 8. [Emergency Credential Revocation](#8-emergency-credential-revocation)
    - 8.1 When to use: active credential compromise; provider misbehaving (sending cross-tenant data, DDoS-like behaviour)
