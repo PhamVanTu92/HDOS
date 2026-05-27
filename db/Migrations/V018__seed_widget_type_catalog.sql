@@ -61,7 +61,7 @@ VALUES
  'Gauge',
  ARRAY['value', 'min', 'max'],
  ARRAY['unit', 'target', 'thresholds'],
- ARRAY[],
+ ARRAY[]::text[],
  16),
 
 ('heatmap', 'visualization', 'Bản đồ nhiệt',
@@ -69,7 +69,7 @@ VALUES
  'Grid',
  ARRAY['x', 'y', 'value'],
  ARRAY['tooltip'],
- ARRAY[],
+ ARRAY[]::text[],
  17),
 
 ('scatter', 'visualization', 'Biểu đồ phân tán',
@@ -77,31 +77,31 @@ VALUES
  'ScatterChart',
  ARRAY['x', 'y'],
  ARRAY['size', 'label', 'series', 'color'],
- ARRAY[],
+ ARRAY[]::text[],
  18),
 
 ('advanced_table', 'visualization', 'Bảng nâng cao',
  'Bảng phân trang phía server, sort, filter, export CSV/Excel.',
  'Table',
- ARRAY[],
- ARRAY[],
+ ARRAY[]::text[],
+ ARRAY[]::text[],
  ARRAY['simple_table'],
  19),
 
 ('simple_table', 'visualization', 'Bảng đơn giản',
  'Bảng phân trang phía client. Tối đa 1000 dòng.',
  'List',
- ARRAY[],
- ARRAY[],
+ ARRAY[]::text[],
+ ARRAY[]::text[],
  ARRAY['advanced_table'],
  20),
 
 ('pivot_table', 'visualization', 'Bảng pivot',
  'Cross-tabulation nhiều chiều với tổng hàng/cột.',
  'LayoutGrid',
- ARRAY[],
- ARRAY[],
- ARRAY[],
+ ARRAY[]::text[],
+ ARRAY[]::text[],
+ ARRAY[]::text[],
  21),
 
 ('funnel', 'visualization', 'Biểu đồ phễu',
@@ -119,7 +119,7 @@ VALUES
  'ChevronDown',
  ARRAY['filterKey', 'options'],
  ARRAY['currentValue', 'multiSelect'],
- ARRAY[],
+ ARRAY[]::text[],
  30),
 
 ('filter_date_range', 'filter', 'Bộ lọc ngày',
@@ -127,7 +127,7 @@ VALUES
  'Calendar',
  ARRAY['filterKey'],
  ARRAY['presets', 'minDate', 'maxDate'],
- ARRAY[],
+ ARRAY[]::text[],
  31),
 
 ('filter_slider', 'filter', 'Bộ lọc số',
@@ -135,7 +135,7 @@ VALUES
  'Sliders',
  ARRAY['filterKey', 'min', 'max'],
  ARRAY['step', 'format'],
- ARRAY[],
+ ARRAY[]::text[],
  32),
 
 ('filter_search', 'filter', 'Ô tìm kiếm',
@@ -143,7 +143,7 @@ VALUES
  'Search',
  ARRAY['filterKey'],
  ARRAY['placeholder'],
- ARRAY[],
+ ARRAY[]::text[],
  33),
 
 -- ── Layout (18–19) ────────────────────────────────────────────────────────────
@@ -153,15 +153,15 @@ VALUES
  'FileText',
  ARRAY['content'],
  ARRAY['renderMode', 'templateVariables'],
- ARRAY[],
+ ARRAY[]::text[],
  40),
 
 ('tab_container', 'layout', 'Tab container',
  'Nhóm các widget theo tab. Widget trong tab không-mặc định được lazy load.',
  'Tabs',
  ARRAY['tabs'],
- ARRAY[],
- ARRAY[],
+ ARRAY[]::text[],
+ ARRAY[]::text[],
  41),
 
 -- ── Healthcare (20–31) ────────────────────────────────────────────────────────
@@ -179,7 +179,7 @@ VALUES
  'Activity',
  ARRAY['id', 'label', 'current', 'max'],
  ARRAY['sublabel', 'percent', 'colorThresholds', 'badge', 'badgeVariant'],
- ARRAY[],
+ ARRAY[]::text[],
  51),
 
 ('flow_steps', 'healthcare', 'Luồng bước',
@@ -187,7 +187,7 @@ VALUES
  'ArrowRight',
  ARRAY['id', 'label', 'status'],
  ARRAY['sublabel', 'count'],
- ARRAY[],
+ ARRAY[]::text[],
  52),
 
 ('timeline_vertical', 'healthcare', 'Timeline dọc',
@@ -195,7 +195,7 @@ VALUES
  'Clock',
  ARRAY['id', 'timeLabel', 'title', 'status'],
  ARRAY['subtitle', 'actor', 'note', 'isoTime'],
- ARRAY[],
+ ARRAY[]::text[],
  53),
 
 ('alert_list', 'healthcare', 'Danh sách cảnh báo',
@@ -203,7 +203,7 @@ VALUES
  'AlertTriangle',
  ARRAY['id', 'level', 'title', 'time', 'acknowledged'],
  ARRAY['subtitle', 'runbookId', 'acknowledgedBy'],
- ARRAY[],
+ ARRAY[]::text[],
  54),
 
 ('bed_grid', 'healthcare', 'Lưới giường bệnh',
@@ -211,7 +211,7 @@ VALUES
  'BedDouble',
  ARRAY['deptId', 'deptName', 'bedId', 'bedLabel', 'status'],
  ARRAY['floor', 'patientId', 'patientName', 'admittedAt'],
- ARRAY[],
+ ARRAY[]::text[],
  55),
 
 ('room_status_grid', 'healthcare', 'Trạng thái phòng',
@@ -219,7 +219,7 @@ VALUES
  'DoorOpen',
  ARRAY['id', 'label', 'status', 'primaryText'],
  ARRAY['secondaryText', 'progressPercent', 'startTime', 'estimatedEnd', 'badgeLabel'],
- ARRAY[],
+ ARRAY[]::text[],
  56),
 
 ('map_pins', 'healthcare', 'Bản đồ ghim vị trí',
@@ -227,7 +227,7 @@ VALUES
  'MapPin',
  ARRAY['id', 'x', 'y', 'label', 'status'],
  ARRAY['sublabel', 'type', 'metadata'],
- ARRAY[],
+ ARRAY[]::text[],
  57),
 
 ('patient_flow_stages', 'healthcare', 'Luồng bệnh nhân',
@@ -243,7 +243,7 @@ VALUES
  'ShieldAlert',
  ARRAY['level', 'label', 'count', 'percent', 'color'],
  ARRAY['action', 'changeFromPrev'],
- ARRAY[],
+ ARRAY[]::text[],
  59),
 
 ('news2_bars', 'healthcare', 'NEWS2 Score',
@@ -251,7 +251,7 @@ VALUES
  'HeartPulse',
  ARRAY['id', 'name', 'score', 'level'],
  ARRAY['ward', 'bed', 'trend', 'components', 'lastAssessed', 'alertSent'],
- ARRAY[],
+ ARRAY[]::text[],
  60),
 
 -- ── AI (32) ───────────────────────────────────────────────────────────────────
@@ -259,8 +259,8 @@ VALUES
 ('chat_panel', 'ai', 'AI Chatbot',
  'Trợ lý AI nhúng vào dashboard. Kết nối với operation AI.',
  'MessageSquare',
- ARRAY[],
+ ARRAY[]::text[],
  ARRAY['systemRole', 'operationPattern', 'quickQuestions', 'allowedRoles'],
- ARRAY[],
+ ARRAY[]::text[],
  70)
 ON CONFLICT (chart_type) DO NOTHING;
