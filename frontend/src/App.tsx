@@ -3,13 +3,10 @@ import { useAuth } from 'react-oidc-context';
 import { ProtectedRoute } from './auth/ProtectedRoute';
 import { Layout } from './components/Layout';
 import { Dashboard } from './pages/Dashboard';
-import { ReportViewer } from './pages/ReportViewer';
 import { ReportScreen } from './pages/ReportScreen';
-import { DataManagement } from './pages/DataManagement';
 import { Admin } from './pages/Admin';
 import { ProviderOperations } from './pages/admin/ProviderOperations';
 import { TestConsole } from './pages/admin/TestConsole';
-import { ReportDesigner } from './pages/admin/ReportDesigner';
 import { DataSyncMonitor } from './pages/admin/DataSyncMonitor';
 import { MenuManager } from './pages/admin/MenuManager';
 
@@ -33,15 +30,12 @@ export default function App() {
           <ProtectedRoute>
             <Layout>
               <Routes>
-                <Route path="/"                   element={<Dashboard />} />
-                <Route path="/reports"            element={<ReportViewer />} />
-                <Route path="/reports/:menuSlug" element={<ReportScreen />} />
-                <Route path="/data"               element={<DataManagement />} />
+                <Route path="/"                    element={<Dashboard />} />
+                <Route path="/reports/:menuSlug"  element={<ReportScreen />} />
                 {/* Admin sub-pages */}
                 <Route path="/admin"              element={<Admin />} />
                 <Route path="/admin/operations"   element={<ProviderOperations />} />
                 <Route path="/admin/test"         element={<TestConsole />} />
-                <Route path="/admin/designer"     element={<ReportDesigner />} />
                 <Route path="/admin/sync"         element={<DataSyncMonitor />} />
                 <Route path="/admin/menus"        element={<MenuManager />} />
               </Routes>

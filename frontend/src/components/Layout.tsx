@@ -1,8 +1,10 @@
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from 'react-oidc-context';
 import { useSignalRConnection } from '../hooks/useSignalR';
 import { hasRealmRole } from '../api/client';
+import { apiGet } from '../api/client';
+import type { MenuSummary } from '../types/menuTypes';
 
 interface NavItem {
   to:    string;
@@ -18,24 +20,6 @@ function BarChartIcon() {
     <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
         d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-    </svg>
-  );
-}
-
-function DocumentIcon() {
-  return (
-    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-        d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-    </svg>
-  );
-}
-
-function DatabaseIcon() {
-  return (
-    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-        d="M4 7c0-1.657 3.582-3 8-3s8 1.343 8 3M4 7v5c0 1.657 3.582 3 8 3s8-1.343 8-3V7M4 7c0 1.657 3.582 3 8 3s8-1.343 8-3m0 10v-5" />
     </svg>
   );
 }
@@ -68,15 +52,6 @@ function TerminalIcon() {
   );
 }
 
-function PencilIcon() {
-  return (
-    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-        d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-    </svg>
-  );
-}
-
 function SyncIcon() {
   return (
     <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -98,18 +73,15 @@ function MenuIcon() {
 // ── Nav items ─────────────────────────────────────────────────────────────────
 
 const NAV_ITEMS: NavItem[] = [
-  { to: '/',        label: 'Dashboard',         icon: <BarChartIcon />, end: true },
-  { to: '/reports', label: 'Báo cáo',            icon: <DocumentIcon /> },
-  { to: '/data',    label: 'Quản lý dữ liệu',   icon: <DatabaseIcon /> },
+  { to: '/', label: 'Dashboard', icon: <BarChartIcon />, end: true },
 ];
 
 const ADMIN_ITEMS: NavItem[] = [
-  { to: '/admin',            label: 'Quản trị Provider',      icon: <CogIcon />,      end: true },
-  { to: '/admin/operations', label: 'Quản lý Operations',     icon: <ListIcon /> },
-  { to: '/admin/test',       label: 'Test Console',            icon: <TerminalIcon /> },
-  { to: '/admin/designer',   label: 'Thiết kế Báo cáo',      icon: <PencilIcon /> },
-  { to: '/admin/sync',       label: 'Theo dõi đồng bộ',      icon: <SyncIcon /> },
-  { to: '/admin/menus',      label: 'Quản lý Menu BC',        icon: <MenuIcon /> },
+  { to: '/admin',            label: 'Quản trị',            icon: <CogIcon />,      end: true },
+  { to: '/admin/operations', label: 'Quản lý Operations',  icon: <ListIcon /> },
+  { to: '/admin/test',       label: 'Test Console',         icon: <TerminalIcon /> },
+  { to: '/admin/sync',       label: 'Theo dõi đồng bộ',   icon: <SyncIcon /> },
+  { to: '/admin/menus',      label: 'Quản lý Menu BC',     icon: <MenuIcon /> },
 ];
 
 // ── Sub-nav item (indented) ───────────────────────────────────────────────────
@@ -135,15 +107,75 @@ function SubNavLink({ item, open }: { item: NavItem; open: boolean }) {
   );
 }
 
+// ── Dynamic report menu items from API ───────────────────────────────────────
+
+function ReportNavItems({ menus, open }: { menus: MenuSummary[]; open: boolean }) {
+  const roots = menus.filter(m => m.parentId === null).sort((a, b) => a.sortOrder - b.sortOrder);
+
+  return (
+    <>
+      {roots.map(root => {
+        const children = menus
+          .filter(m => m.parentId === root.id)
+          .sort((a, b) => a.sortOrder - b.sortOrder);
+
+        return (
+          <div key={root.id}>
+            <NavLink
+              to={`/reports/${root.slug}`}
+              className={({ isActive }) =>
+                `flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${
+                  isActive
+                    ? 'bg-brand-700 text-white'
+                    : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+                }`
+              }
+            >
+              <span className="shrink-0 text-base leading-none">{root.icon}</span>
+              {open && <span className="truncate">{root.name}</span>}
+            </NavLink>
+
+            {/* Child menus — only show when sidebar is open */}
+            {open && children.map(child => (
+              <NavLink
+                key={child.id}
+                to={`/reports/${child.slug}`}
+                className={({ isActive }) =>
+                  `flex items-center gap-3 pl-10 pr-4 py-2 text-sm transition-colors ${
+                    isActive
+                      ? 'bg-brand-700 text-white'
+                      : 'text-gray-400 hover:bg-gray-800 hover:text-white'
+                  }`
+                }
+              >
+                <span className="shrink-0 text-sm leading-none opacity-80">{child.icon}</span>
+                <span className="truncate">{child.name}</span>
+              </NavLink>
+            ))}
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
 // ── Layout ────────────────────────────────────────────────────────────────────
 
 export function Layout({ children }: { children: ReactNode }) {
   const auth          = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const isAdmin       = hasRealmRole('admin');
+  const [reportMenus, setReportMenus] = useState<MenuSummary[]>([]);
 
   // Manages the global SignalR connection lifecycle
   useSignalRConnection();
+
+  // Load report menus for sidebar
+  useEffect(() => {
+    apiGet<MenuSummary[]>('/api/v1/reports/menus')
+      .then(data => setReportMenus(data))
+      .catch(() => { /* silent — sidebar just shows nothing */ });
+  }, []);
 
   const displayName =
     auth.user?.profile.name ??
@@ -174,7 +206,7 @@ export function Layout({ children }: { children: ReactNode }) {
 
         {/* Nav */}
         <nav className="flex-1 overflow-y-auto py-4">
-          {/* Main items */}
+          {/* Dashboard */}
           {NAV_ITEMS.map((item) => (
             <NavLink
               key={item.to}
@@ -193,6 +225,19 @@ export function Layout({ children }: { children: ReactNode }) {
             </NavLink>
           ))}
 
+          {/* Dynamic report menu items */}
+          {reportMenus.length > 0 && (
+            <>
+              {sidebarOpen && (
+                <p className="mt-3 mb-1 px-4 text-xs font-semibold uppercase tracking-widest text-gray-500">
+                  Báo cáo
+                </p>
+              )}
+              {!sidebarOpen && <hr className="my-2 border-gray-700" />}
+              <ReportNavItems menus={reportMenus} open={sidebarOpen} />
+            </>
+          )}
+
           {/* Admin section — only visible to admins */}
           {isAdmin && (
             <>
@@ -204,7 +249,7 @@ export function Layout({ children }: { children: ReactNode }) {
                 <hr className="my-3 border-gray-700" />
               )}
 
-              {/* First item: Provider management (top-level icon) */}
+              {/* /admin — top-level */}
               <NavLink
                 to="/admin"
                 end
@@ -217,15 +262,13 @@ export function Layout({ children }: { children: ReactNode }) {
                 }
               >
                 <span className="shrink-0"><CogIcon /></span>
-                {sidebarOpen && <span>Quản trị Provider</span>}
+                {sidebarOpen && <span>Quản trị</span>}
               </NavLink>
 
-              {/* Sub-items — always visible; indented when sidebar open, icons when collapsed */}
-              <SubNavLink item={ADMIN_ITEMS[1]} open={sidebarOpen} />
-              <SubNavLink item={ADMIN_ITEMS[2]} open={sidebarOpen} />
-              <SubNavLink item={ADMIN_ITEMS[3]} open={sidebarOpen} />
-              <SubNavLink item={ADMIN_ITEMS[4]} open={sidebarOpen} />
-              <SubNavLink item={ADMIN_ITEMS[5]} open={sidebarOpen} />
+              {/* Sub-items */}
+              {ADMIN_ITEMS.slice(1).map(item => (
+                <SubNavLink key={item.to} item={item} open={sidebarOpen} />
+              ))}
             </>
           )}
         </nav>
