@@ -15,6 +15,7 @@ import { RoomStatusGridWidget }   from './RoomStatusGridWidget';
 import { TimelineVerticalWidget } from './TimelineVerticalWidget';
 import { News2BarsWidget }        from './News2BarsWidget';
 import { MapPinsWidget }          from './MapPinsWidget';
+import { GaugeWidget }            from './GaugeWidget';
 import { ChatPanelWidget }        from './ChatPanelWidget';
 import { FilterDropdownWidget }   from './FilterDropdownWidget';
 import { FilterDateRangeWidget }  from './FilterDateRangeWidget';
@@ -82,8 +83,9 @@ export function WidgetRenderer({ chartType, data, visualConfig, filter }: Widget
     // ── AI ────────────────────────────────────────────────────────────────
     case 'chat_panel':            return <ChatPanelWidget data={data} />;
 
-    // ── Single KPI ────────────────────────────────────────────────────────
+    // ── Single KPI / Gauge ───────────────────────────────────────────────
     case 'kpi':                   return <KpiWidget data={data} />;
+    case 'gauge':                 return <GaugeWidget data={data} />;
 
     // ── Time series / bar / area ─────────────────────────────────────────
     case 'line_chart':
