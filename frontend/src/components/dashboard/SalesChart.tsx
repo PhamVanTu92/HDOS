@@ -33,7 +33,7 @@ export function SalesChart({ data, loading = false }: SalesChartProps) {
     );
   }
 
-  if (!data || data.labels.length === 0) {
+  if (!data || !data.labels || data.labels.length === 0) {
     return (
       <div className="flex h-64 items-center justify-center rounded-xl bg-white shadow-sm">
         <p className="text-sm text-gray-400">No sales data available</p>

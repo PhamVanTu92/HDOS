@@ -12,6 +12,39 @@ import type {
 // Must match the dashboard/widget registered in event_subscriptions
 // (DashboardCode=main-dashboard, WidgetId=main-dashboard) so WidgetStale lands here.
 const WIDGET_ID = 'main-dashboard';
+
+/**
+ * Adapts the RENDER_CONTRACTS kpi_grid payload returned by the new DashboardSummaryHandler
+ * into the legacy DashboardSummary shape expected by Dashboard.tsx.
+ *
+ * New format: { columns: 3, items: [{id, label, value, format, ...}] }
+ * Legacy format: { totalRevenue, totalUnits, topRegion, topProduct, alerts[] }
+ */
+function parseKpiGrid(raw: unknown): DashboardSummary | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, unknown>;
+
+  // New RENDER_CONTRACTS kpi_grid format (items array present)
+  if (Array.isArray(r.items)) {
+    type KpiItem = { id: string; value: unknown };
+    const items = r.items as KpiItem[];
+    const find = (id: string) => items.find((it) => it.id === id)?.value;
+
+    const stockAlertCount = Number(find('stock_alerts') ?? 0);
+    return {
+      totalRevenue: Number(find('total_revenue') ?? 0),
+      totalUnits:   Number(find('total_units')   ?? 0),
+      topRegion:    String(find('top_region')    ?? '—'),
+      topProduct:   '—',
+      alerts: stockAlertCount > 0
+        ? [`${stockAlertCount} sản phẩm tồn kho thấp`]
+        : [],
+    };
+  }
+
+  // Fallback: already in legacy shape (e.g. cached response from old handler)
+  return raw as DashboardSummary;
+}
 const DASHBOARD_CHANNEL = `widget:main-dashboard:${WIDGET_ID}`;
 
 function tenantFromToken(sub: string | undefined): string {
@@ -108,8 +141,9 @@ export function useDashboard() {
   useWidgetSubscription(DASHBOARD_CHANNEL, handleWidgetStale, true);
 
   const result = pushed ?? polled ?? null;
-  const summary =
-    result?.status === 'Completed' ? result.data ?? null : null;
+  const summary = parseKpiGrid(
+    result?.status === 'Completed' ? (result.data as unknown) ?? null : null,
+  );
 
   const isLoading = submitting || (!pushed && resultLoading);
   const error =

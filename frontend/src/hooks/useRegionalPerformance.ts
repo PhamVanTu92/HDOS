@@ -15,6 +15,48 @@ import type {
 const WIDGET_CHANNEL = 'widget:main-dashboard:main-dashboard';
 
 /**
+ * Adapts the RENDER_CONTRACTS bar_chart payload returned by the new RegionalPerformanceHandler
+ * into the legacy RegionPerformanceRow[] shape expected by RegionTable.tsx.
+ *
+ * New format: { series: [{name:"Thực tế",data:[{x,y}]}, {name:"Mục tiêu",data:[{x,y}]}] }
+ * Legacy format: [{ name, revenue, units, target, achievementPct }]
+ *
+ * Note: `units` is not available in the new format and defaults to 0.
+ */
+function parseBarChart(raw: unknown): RegionPerformanceRow[] {
+  if (!raw || typeof raw !== 'object') return [];
+  const r = raw as Record<string, unknown>;
+
+  // Old legacy format
+  if (Array.isArray(r.regions)) return r.regions as RegionPerformanceRow[];
+
+  // New RENDER_CONTRACTS bar_chart format
+  if (Array.isArray(r.series)) {
+    type RcSeries = { name: string; data: Array<{ x: unknown; y: number }> };
+    const series = r.series as RcSeries[];
+    const actual = series.find((s) => s.name === 'Thực tế');
+    const target = series.find((s) => s.name === 'Mục tiêu');
+    if (!actual) return [];
+
+    return actual.data.map((pt, i) => {
+      const actualVal = pt.y;
+      const targetVal = target?.data[i]?.y ?? 0;
+      const achievementPct =
+        targetVal > 0 ? Math.round((actualVal / targetVal) * 100) : 0;
+      return {
+        name:           String(pt.x),
+        revenue:        actualVal,
+        units:          0,   // not returned by bar_chart handler
+        target:         targetVal,
+        achievementPct,
+      };
+    });
+  }
+
+  return [];
+}
+
+/**
  * Fetches Regional Performance data for the RegionTable widget.
  *
  * Primary path  : result delivered via SignalR RequestCompleted push.
@@ -105,8 +147,9 @@ export function useRegionalPerformance() {
   useWidgetSubscription(WIDGET_CHANNEL, handleWidgetStale, true);
 
   const result  = pushed ?? polled ?? null;
-  const regions: RegionPerformanceRow[] =
-    result?.status === 'Completed' ? result.data?.regions ?? [] : [];
+  const regions: RegionPerformanceRow[] = parseBarChart(
+    result?.status === 'Completed' ? (result.data as unknown) ?? null : null,
+  );
   const isLoading = submitting || (!pushed && resultLoading);
   const error =
     submitError ??

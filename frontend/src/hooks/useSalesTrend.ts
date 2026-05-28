@@ -14,6 +14,36 @@ import type {
 // is staled whenever excel-provider pushes a datasource.updated event.
 const WIDGET_CHANNEL = 'widget:main-dashboard:main-dashboard';
 
+/**
+ * Adapts the RENDER_CONTRACTS line_chart payload returned by the new SalesTrendHandler
+ * into the legacy SalesTrend shape expected by SalesChart.tsx.
+ *
+ * New format: { series: [{name, data: [{x, y}]}], axes, annotations }
+ * Legacy format: { labels: string[], series: [{name, data: number[]}] }
+ */
+function parseLineChart(raw: unknown): SalesTrend | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, unknown>;
+
+  // New RENDER_CONTRACTS line_chart format: data points are {x, y} objects
+  if (Array.isArray(r.series) && r.series.length > 0) {
+    type RcSeries = { name: string; data: Array<{ x: unknown; y: number }> };
+    const series = r.series as RcSeries[];
+    const firstPt = series[0]?.data?.[0];
+    if (firstPt && typeof firstPt === 'object' && 'x' in firstPt) {
+      const labels = series[0].data.map((pt) => String(pt.x));
+      const mappedSeries = series.map((s) => ({
+        name: s.name,
+        data: s.data.map((pt) => pt.y),
+      }));
+      return { labels, series: mappedSeries };
+    }
+  }
+
+  // Fallback: already in legacy shape
+  return raw as SalesTrend;
+}
+
 function defaultParams(): SalesTrendParams {
   const to = new Date();
   const from = new Date();
@@ -117,7 +147,9 @@ export function useSalesTrend() {
   useWidgetSubscription(WIDGET_CHANNEL, handleWidgetStale, true);
 
   const result = pushed ?? polled ?? null;
-  const trend  = result?.status === 'Completed' ? result.data ?? null : null;
+  const trend = parseLineChart(
+    result?.status === 'Completed' ? (result.data as unknown) ?? null : null,
+  );
   const isLoading = submitting || (!pushed && resultLoading);
   const error =
     submitError ??
