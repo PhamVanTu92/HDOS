@@ -16,6 +16,7 @@ import { TimelineVerticalWidget } from './TimelineVerticalWidget';
 import { News2BarsWidget }        from './News2BarsWidget';
 import { MapPinsWidget }          from './MapPinsWidget';
 import { GaugeWidget }            from './GaugeWidget';
+import { FunnelWidget }           from './FunnelWidget';
 import { ChatPanelWidget }        from './ChatPanelWidget';
 import { FilterDropdownWidget }   from './FilterDropdownWidget';
 import { FilterDateRangeWidget }  from './FilterDateRangeWidget';
@@ -86,6 +87,7 @@ export function WidgetRenderer({ chartType, data, visualConfig, filter }: Widget
     // ── Single KPI / Gauge ───────────────────────────────────────────────
     case 'kpi':                   return <KpiWidget data={data} />;
     case 'gauge':                 return <GaugeWidget data={data} />;
+    case 'funnel':                return <FunnelWidget data={data} />;
 
     // ── Time series / bar / area ─────────────────────────────────────────
     case 'line_chart':
