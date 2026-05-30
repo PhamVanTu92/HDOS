@@ -1,5 +1,5 @@
 # PROVIDER_PROTOCOL.md — External Provider Integration Bible
-> Version: 6.1 | Audience: External provider teams (any language) | Last updated: 2026-05-18
+> Version: 6.2 | Audience: External provider teams (any language) | Last updated: 2026-05-27
 
 This document is the **single source of truth** for teams building external providers for the Realtime Reporting Platform. You do not need access to the platform's source code, RabbitMQ, Redis, or PostgreSQL. Everything you need is:
 - This document
@@ -391,6 +391,12 @@ This document is the **single source of truth** for teams building external prov
     - 17.3 Column schema (optional)
     - 17.4 Failure case
     - 17.5 Datasource definition example
+18. [SSE Progress Event Ordering — Late Arrival Contract](#18-sse-progress-event-ordering--late-arrival-contract)
+19. [Widget Render Contract for Dashboard Operations](#19-widget-render-contract-for-dashboard-operations)
+    - 19.1 `resultChartType` field
+    - 19.2 Full widget type table (31 types)
+    - 19.3 How to choose a chart type for your operation
+    - 19.4 Validate endpoint
 
 ---
 
@@ -512,3 +518,144 @@ Terminal events:
 event: done
 data: {"requestId":"abc123","status":"completed"}
 ```
+
+---
+
+## 19. Widget Render Contract for Dashboard Operations
+
+This section applies when your operation is wired into the **Dashboard Designer** — when a user places a widget on a dashboard backed by your operation, the platform calls your operation and maps `Terminal.payloadJson` into the widget renderer using the `chartType` contract you declared.
+
+### 19.1 `resultChartType` field
+
+When registering an operation that will power a dashboard widget, include `resultChartType` in the registration payload:
+
+```json
+{
+  "operationPattern": "report.dashboard.summary",
+  "handlerType": "external",
+  "providerId": "excel-provider",
+  "resultChartType": "kpi_grid",
+  "payloadSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "required": ["rows"],
+    "properties": {
+      "rows": { "type": "array" }
+    }
+  },
+  "timeoutMs": 5000,
+  "cacheable": true,
+  "idempotent": true
+}
+```
+
+**Effect of `resultChartType`:**
+- Platform validates your `payloadSchema` is compatible with the declared chart type's JSON Schema (from `widget_type_catalog`)
+- Dashboard Designer surfaces this operation only in the "compatible operations" panel for that chart type
+- Frontend knows which rendering contract to apply without probing the payload
+- `GET /api/v1/admin/operations?resultChartType=kpi_grid` returns all operations you can wire to a `kpi_grid` widget
+
+If `resultChartType` is omitted or `null`: operation is treated as `raw_json` — usable in widgets but rendered as pretty-printed JSON only.
+
+### 19.2 Full widget type table (31 types)
+
+| `resultChartType` | Category | Provider `payloadJson` shape |
+|---|---|---|
+| `line_chart` | Visualization | `{ rows: [{x, y, series?}] }` |
+| `bar_chart` | Visualization | `{ rows: [{x, y, series?}] }` |
+| `area_chart` | Visualization | `{ rows: [{x, y, series?}] }` |
+| `pie_chart` | Visualization | `{ rows: [{label, value, color?}] }` |
+| `donut_chart` | Visualization | `{ rows: [{label, value, color?}] }` |
+| `kpi` | Visualization | `{ rows: [{value, label, deltaPercent?, direction?, sparkline?}] }` (single row) |
+| `gauge` | Visualization | `{ rows: [{value, min, max, unit?}] }` (single row) |
+| `heatmap` | Visualization | `{ rows: [{x, y, value}] }` |
+| `scatter` | Visualization | `{ rows: [{x, y, size?, label?, series?}] }` |
+| `advanced_table` | Visualization | `{ rows: [...], schema: [{name, type}], totalRows? }` |
+| `simple_table` | Visualization | `{ rows: [...], schema: [{name, type}] }` |
+| `pivot_table` | Visualization | `{ rows: [...], schema: [...], pivotConfig: {rowDims, colDims, measures} }` |
+| `funnel` | Visualization | `{ rows: [{label, value}] }` (ordered, first row = top) |
+| `kpi_grid` | Healthcare | `{ rows: [{id, label, value, format?, deltaPercent?, direction?, sparkline?, icon?, variant?}] }` |
+| `progress_rows` | Healthcare | `{ rows: [{id, label, sublabel?, current, max, badge?, badgeVariant?}] }` |
+| `flow_steps` | Healthcare | `{ rows: [{id, label, sublabel?, status, count?}] }` (ordered) |
+| `timeline_vertical` | Healthcare | `{ rows: [{id, timeLabel, isoTime?, title, subtitle?, status, actor?, note?}] }` (ordered) |
+| `alert_list` | Healthcare | `{ rows: [{id, level, title, subtitle?, time, acknowledged, runbookId?}] }` |
+| `bed_grid` | Healthcare | `{ rows: [{deptId, deptName, bedId, bedLabel, status, patientId?, patientName?}] }` |
+| `room_status_grid` | Healthcare | `{ rows: [{id, label, status, primaryText, secondaryText?, progressPercent?}] }` |
+| `map_pins` | Healthcare | `{ rows: [{id, x, y, label, sublabel?, status, type?, metadata?}] }` |
+| `patient_flow_stages` | Healthcare | `{ rows: [{id, label, count, avgWaitMin?, status?}] }` (ordered) |
+| `risk_tiers` | Healthcare | `{ rows: [{level, label, count, percent, color, action?, changeFromPrev?}] }` |
+| `news2_bars` | Healthcare | `{ rows: [{id, name, ward?, bed?, score, level, trend?, lastAssessed?}] }` |
+| `chat_panel` | Healthcare/AI | Static config — no rows. See §19.3. |
+
+> **Note on row-based contract**: The platform's `ExternalProviderAdapter` reads `payload.rows` (or `payload[rowsPath]` if configured). For chart types with a specific shape, the adapter transforms rows into the widget-specific contract (see `RENDER_CONTRACTS.md §3–11`). Your payload just needs to provide rows with the right column names.
+
+### 19.3 How to choose a chart type for your operation
+
+| I want to display... | Use `resultChartType` |
+|---|---|
+| A single number with trend | `kpi` |
+| Multiple numbers side by side | `kpi_grid` |
+| A line over time | `line_chart` or `area_chart` |
+| Bars comparing categories | `bar_chart` |
+| Part-of-whole breakdown | `pie_chart` or `donut_chart` |
+| Bed / room occupancy progress | `progress_rows` |
+| Patient care steps / pathway | `flow_steps` |
+| Historical event timeline | `timeline_vertical` |
+| Live critical alerts feed | `alert_list` |
+| Hospital bed map grid | `bed_grid` |
+| OR / ICU room status | `room_status_grid` |
+| Ambulance / asset on floor plan | `map_pins` |
+| ER patient flow counts | `patient_flow_stages` |
+| Risk stratification by tier | `risk_tiers` |
+| NEWS2 scores per patient | `news2_bars` |
+| AI chatbot panel | `chat_panel` |
+| A full data table (paginated) | `advanced_table` |
+| A small data table | `simple_table` |
+| Cross-tabulation | `pivot_table` |
+| Conversion / dropout funnel | `funnel` |
+| Something not in this list | omit `resultChartType` → `raw_json` |
+
+### 19.4 Validate endpoint
+
+Before submitting `resultChartType` in your operation registration, you can validate that your `payloadSchema` is compatible:
+
+```http
+POST /api/v1/admin/schemas/validate
+Authorization: Bearer <admin-jwt>
+Content-Type: application/json
+
+{
+  "chartType": "kpi_grid",
+  "payloadSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "required": ["rows"],
+    "properties": {
+      "rows": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": ["id", "label", "value"],
+          "properties": {
+            "id":    { "type": "string" },
+            "label": { "type": "string" },
+            "value": { "type": "number" }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+Response:
+```json
+{
+  "valid": true,
+  "warnings": [],
+  "requiredColumns": ["id", "label", "value"],
+  "optionalColumns": ["format", "deltaPercent", "direction", "sparkline", "icon", "variant"]
+}
+```
+
+If `valid: false`, `errors` contains the incompatible fields. Fix these before registering the operation.

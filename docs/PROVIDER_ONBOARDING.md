@@ -273,3 +273,98 @@ This document covers the full administrative lifecycle of an external provider: 
       DELETE /api/v1/admin/operations?providerId=ml-team-fraud
       ```
     - 12.9 Confirm Grafana shows zero traffic for the provider for 24h before closing the ticket
+
+---
+
+## 13. Quick-Start Widget Type Selection
+
+Khi đăng ký operation trên HDOS và muốn dữ liệu hiển thị trên Dashboard Designer, bạn cần khai báo `resultChartType`. Bảng dưới đây giúp bạn chọn nhanh.
+
+### 13.1 Bảng chọn widget type
+
+| Tôi muốn hiển thị... | Dùng `resultChartType` | Cột bắt buộc trong `rows[]` |
+|---|---|---|
+| Một chỉ số KPI đơn | `kpi` | `value`, `label` |
+| 2–6 KPI cạnh nhau | `kpi_grid` | `id`, `label`, `value` |
+| Đường biểu đồ theo thời gian | `line_chart` | `x`, `y` |
+| Cột so sánh danh mục | `bar_chart` | `x`, `y` |
+| Vùng tô màu (area) | `area_chart` | `x`, `y` |
+| Tỷ lệ phần trăm (tròn) | `pie_chart` hoặc `donut_chart` | `label`, `value` |
+| Thanh tiến trình (công suất giường, OR) | `progress_rows` | `id`, `label`, `current`, `max` |
+| Quy trình / bước điều trị | `flow_steps` | `id`, `label`, `status` |
+| Dòng thời gian sự kiện | `timeline_vertical` | `id`, `timeLabel`, `title`, `status` |
+| Cảnh báo lâm sàng (L1/L2/L3) | `alert_list` | `id`, `level`, `title`, `time`, `acknowledged` |
+| Bản đồ giường cả bệnh viện | `bed_grid` | `deptId`, `deptName`, `bedId`, `bedLabel`, `status` |
+| Trạng thái phòng mổ / ICU | `room_status_grid` | `id`, `label`, `status`, `primaryText` |
+| Vị trí xe cấp cứu / tài sản | `map_pins` | `id`, `x`, `y`, `label`, `status` |
+| Số bệnh nhân từng giai đoạn | `patient_flow_stages` | `id`, `label`, `count` |
+| Phân tầng nguy cơ | `risk_tiers` | `level`, `label`, `count`, `percent`, `color` |
+| NEWS2 score theo bệnh nhân | `news2_bars` | `id`, `name`, `score`, `level` |
+| AI chatbot nhúng vào dashboard | `chat_panel` | *(không có rows — cấu hình tĩnh)* |
+| Bảng dữ liệu lớn, phân trang | `advanced_table` | Tuỳ (cần `schema` array) |
+| Bảng nhỏ (< 1000 dòng) | `simple_table` | Tuỳ (cần `schema` array) |
+| Dữ liệu pivot | `pivot_table` | Tuỳ (cần `pivotConfig`) |
+| Phễu chuyển đổi | `funnel` | `label`, `value` |
+| Chưa có widget phù hợp | *(bỏ trống `resultChartType`)* | Raw JSON fallback |
+
+### 13.2 Ví dụ khai báo operation với widget type
+
+Khi đăng ký operation trên HDOS Admin UI (hoặc API), thêm trường `resultChartType`:
+
+```http
+POST /api/v1/admin/operations
+Authorization: Bearer <admin-jwt>
+
+{
+  "operationPattern": "hospital.bed.status",
+  "handlerType": "external",
+  "providerId": "my-hospital-provider",
+  "resultChartType": "bed_grid",
+  "payloadSchema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "required": ["rows"],
+    "properties": {
+      "rows": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": ["deptId", "deptName", "bedId", "bedLabel", "status"],
+          "properties": {
+            "deptId":    { "type": "string" },
+            "deptName":  { "type": "string" },
+            "bedId":     { "type": "string" },
+            "bedLabel":  { "type": "string" },
+            "status":    { "type": "string", "enum": ["occupied","available","cleaning","reserved","blocked"] },
+            "patientId": { "type": ["string", "null"] },
+            "patientName": { "type": ["string", "null"] }
+          }
+        }
+      }
+    }
+  },
+  "timeoutMs": 3000,
+  "cacheable": true,
+  "idempotent": true
+}
+```
+
+### 13.3 Validate trước khi đăng ký
+
+Kiểm tra `payloadSchema` có tương thích với `resultChartType` không:
+
+```http
+POST /api/v1/admin/schemas/validate
+{ "chartType": "bed_grid", "payloadSchema": { ... } }
+```
+
+Nếu `valid: true` → đăng ký bình thường. Nếu `valid: false` → xem `errors` để sửa schema.
+
+### 13.4 Sau khi đăng ký
+
+1. Vào **HDOS Admin UI → Dashboard Designer**
+2. Chọn dashboard → kéo widget type `bed_grid` vào canvas
+3. Trong Config Panel → Datasource → chọn operation `hospital.bed.status`
+4. Widget tự động render với dữ liệu live từ provider của bạn
+
+**Tài liệu đầy đủ các widget type**: xem `docs/RENDER_CONTRACTS.md §11`.

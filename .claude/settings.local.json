@@ -68,7 +68,13 @@
       "Bash(xargs grep -l \"class OperationRegistration\\\\|record OperationRegistration\")",
       "Bash(Get-ChildItem -Path \"E:\\\\Project\\\\HDOS\" -Force)",
       "Bash(Select-Object Name, Mode)",
-      "Bash(Format-Table -AutoSize)"
+      "Bash(Format-Table -AutoSize)",
+      "Bash(xargs grep -l \"bcrypt\\\\|BCrypt\\\\|secret_hash\")",
+      "Bash(grep -v \"obj\\\\|bin\\\\|//.*secret\")",
+      "Bash(xargs grep -l \"BCrypt\\\\|bcrypt\\\\|VerifyPassword\\\\|client_secret_hash\")",
+      "Bash(ls /mnt/e/Project/HDOS/docs/)",
+      "Bash(Get-Content \"E:\\\\Project\\\\HDOS\\\\docs\\\\PROVIDER_PROTOCOL.md\")",
+      "Bash(Measure-Object -Line)"
     ]
   }
 }
